@@ -8,6 +8,7 @@ launch(
   port = 5792,
   launch.browser = TRUE,
   gazetteer = getOption("georefapp.gazetteer"),
+  stop_on_close = TRUE,
   ...
 )
 }
@@ -20,6 +21,11 @@ launch(
 The application is fully usable without a dictionary -- that is the normal
 state for most of Central Africa -- so a missing file is reported and then
 ignored rather than raised.}
+
+\item{stop_on_close}{Return to the R console when the last browser window
+closes, rather than leaving the console blocked until interrupted.
+Reloading the page does not count as closing it. Set `FALSE` to keep the
+old behaviour and stop the application with Esc.}
 
 \item{...}{Passed to [shiny::runApp()].}
 }

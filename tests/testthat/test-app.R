@@ -236,3 +236,21 @@ test_that("with no provider the panel says so rather than reporting no match", {
   expect_match(as.character(candidate_panel(candidates_empty(), "x")),
                "No locality dictionary is configured")
 })
+
+test_that("stop_on_close is off unless asked for", {
+  # app.R deploys georef_server() to shinyapps.io, where one user closing a tab
+  # must not take the application down for everyone else. The default therefore
+  # has to stay FALSE; launch() is what turns it on.
+  expect_false(formals(georef_server)$stop_on_close)
+  expect_true(formals(launch)$stop_on_close)
+  expect_true(is.function(georef_server(stop_on_close = TRUE)))
+})
+
+test_that("each server instance counts its own sessions", {
+  # The counter lives in georef_server()'s frame rather than the session
+  # function's, so it survives a session ending. Two servers must not share it.
+  a <- georef_server(stop_on_close = TRUE)
+  b <- georef_server(stop_on_close = TRUE)
+  expect_false(identical(environment(a), environment(b)))
+  expect_equal(get("open_sessions", envir = environment(a)), 0L)
+})

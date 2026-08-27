@@ -81,6 +81,13 @@ ellipsoidal reference, not the s2 default.
 - **leafpm circles** arrive as GeoJSON Points carrying `properties$radius` in
   metres. `draw_features_to_sfc()` carries that out of band as a `radius`
   attribute so buffering happens in a metric projection, not in degrees.
+- **`stop_on_close` counts sessions and waits.** `session$onSessionEnded(stopApp)`
+  on its own kills the app on every page reload, because a reload ends the old
+  session before the new one connects. `georef_server()` keeps the count in its
+  own frame (not the session function's) and stops after a 2 s delay only if
+  nothing reconnected. It defaults to `FALSE` and `launch()` passes `TRUE`:
+  `app.R` deploys the same server to shinyapps.io, where one user closing a tab
+  must not take the app down for everyone.
 - **reactable selection** is read with `getReactableState("localities",
   "selected")` using the *bare* id inside a module — it reads `session$input`,
   which is already unnamespaced.

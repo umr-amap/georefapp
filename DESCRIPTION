@@ -25,6 +25,7 @@ Imports:
     dplyr,
     htmltools,
     jsonlite,
+    later,
     leaflet,
     leafpm,
     reactable (>= 0.4.4),

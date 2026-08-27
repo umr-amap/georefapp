@@ -159,6 +159,9 @@ launch(gazetteer = "rainbio-gazetteer.sqlite")    # with the dictionary
 Or open the bundled example from the Import page to try it without data of your
 own.
 
+Closing the browser returns you to the R console; reloading the page does not.
+Pass `stop_on_close = FALSE` to keep the app running and stop it with Esc.
+
 Working on the package itself, `pkgload::load_all(".")` replaces the
 `library()` call and picks up edits without reinstalling.
 

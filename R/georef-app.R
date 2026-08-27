@@ -36,11 +36,38 @@ georef_ui <- function() {
 
 #' Server for the georeferencing application
 #'
+#' @param stop_on_close Stop the application, returning control to the R
+#'   console, once the last browser window closes. Defaults to `FALSE`: on a
+#'   server, one user closing a tab must not take the application down for
+#'   everyone. [launch()] turns it on, because there the browser is the only
+#'   client and leaving R blocked on a dead app helps nobody.
+#'
 #' @return A Shiny server function.
 #'
 #' @export
-georef_server <- function() {
+georef_server <- function(stop_on_close = FALSE) {
+  # Counted here rather than inside the session function: the decision to stop
+  # is about the application, so it has to outlive any one session.
+  open_sessions <- 0L
+
   function(input, output, session) {
+    if (isTRUE(stop_on_close)) {
+      open_sessions <<- open_sessions + 1L
+      session$onSessionEnded(function() {
+        open_sessions <<- open_sessions - 1L
+        # A page reload ends the old session before the new one connects, so
+        # stopping the moment a session ends would kill the application on
+        # every refresh. Wait, then stop only if nothing reconnected -- which
+        # also covers a second tab still being open.
+        later::later(function() {
+          if (open_sessions <= 0L) {
+            message("Browser closed - stopping georefapp.")
+            shiny::stopApp()
+          }
+        }, delay = 2)
+      })
+    }
+
     project_r <- import_server("import")
 
     # One connection for the whole session, owned here and handed to the pages
@@ -108,6 +135,10 @@ use_gazetteer <- function(file, ...) {
 #'   The application is fully usable without a dictionary -- that is the normal
 #'   state for most of Central Africa -- so a missing file is reported and then
 #'   ignored rather than raised.
+#' @param stop_on_close Return to the R console when the last browser window
+#'   closes, rather than leaving the console blocked until interrupted.
+#'   Reloading the page does not count as closing it. Set `FALSE` to keep the
+#'   old behaviour and stop the application with Esc.
 #' @param ... Passed to [shiny::runApp()].
 #'
 #' @return Called for its side effect; does not return until the app stops.
@@ -120,7 +151,8 @@ use_gazetteer <- function(file, ...) {
 #'
 #' @export
 launch <- function(port = 5792, launch.browser = TRUE,
-                   gazetteer = getOption("georefapp.gazetteer"), ...) {
+                   gazetteer = getOption("georefapp.gazetteer"),
+                   stop_on_close = TRUE, ...) {
   if (!is.null(gazetteer)) {
     if (file.exists(gazetteer)) {
       p <- use_gazetteer(gazetteer)
@@ -129,6 +161,9 @@ launch <- function(port = 5792, launch.browser = TRUE,
       message("No gazetteer at ", gazetteer, " — running without one.")
     }
   }
-  app <- shiny::shinyApp(ui = georef_ui(), server = georef_server())
+  app <- shiny::shinyApp(
+    ui = georef_ui(),
+    server = georef_server(stop_on_close = stop_on_close)
+  )
   shiny::runApp(app, port = port, launch.browser = launch.browser, ...)
 }

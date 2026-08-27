@@ -2,3 +2,4 @@
 ^\.Rproj\.user$
 ^app\.R$
 ^\.git$
+^inst/docs$

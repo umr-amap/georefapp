@@ -31,3 +31,9 @@ inst/*
 # ...except the example table the import page loads through system.file(),
 # which is shipped package data rather than internal material.
 !inst/extdata/
+
+# Local only, restated explicitly: internal planning notes that must not reach
+# the repository even if the inst/ rules above are ever loosened. The last
+# matching pattern wins in git, so these survive any negation added later.
+inst/docs/PLAN_RAINBIO_MIGRATION.md
+inst/docs/OUTSTANDING_DECISIONS.md

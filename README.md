@@ -18,6 +18,50 @@ the result.
    bounding circle of what you drew, using the point-radius method.
 3. **Export** a Darwin Core table, plus the decision log that backs it.
 
+## Installation
+
+Copy the three steps below into the R console, one after the other.
+
+```r
+# 1. Allow more time for the download (useful on slow connections)
+options(timeout = max(3000, getOption("timeout")))
+
+# 2. Install the 'remotes' helper - only needed the first time
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+
+# 3. Install georefapp from GitHub (all required packages come with it)
+remotes::install_github("umr-amap/georefapp", upgrade = "never")
+```
+
+Then check that the installation worked:
+
+```r
+library(georefapp)
+```
+
+If this last line prints no error, the package is ready to use.
+
+To install the vignette along with it, add `build_vignettes = TRUE` to step 3;
+it takes a little longer and needs `knitr` and `rmarkdown`.
+
+**Troubleshooting:**
+
+- *"there is no package called 'remotes'"* — run step 2 again.
+- *Installation stops on a slow connection* — restart R, then run the three
+  steps again starting with step 1.
+- If R asks `Do you want to install from sources the package which needs
+  compilation?`, answer **No** (type `n` and press Enter).
+- *`sf` fails to install* — it needs GDAL, GEOS and PROJ on the system. On
+  Windows and macOS the binary from CRAN carries them, which is why answering
+  **No** above matters. On Linux, install the system libraries first
+  (`libgdal-dev`, `libgeos-dev`, `libproj-dev` on Debian and Ubuntu).
+
+**Note:** You do not need a database, an account or a gazetteer to get started.
+Running without a dictionary is fully supported, and is the normal state for
+most of Central Africa — the app simply reports no similar locality. The
+dictionary is an optional local file you build once; see
+[The locality dictionary](#the-locality-dictionary).
+
 ## Reproducibility
 
 A project is a single SQLite file. Decisions are **append-only**: revising a
@@ -107,13 +151,16 @@ options(georefapp.candidates = function(locality_key, verbatim = NULL, limit = 1
 ## Running it
 
 ```r
-pkgload::load_all(".")
+library(georefapp)
 launch()                                          # http://127.0.0.1:5792
 launch(gazetteer = "rainbio-gazetteer.sqlite")    # with the dictionary
 ```
 
 Or open the bundled example from the Import page to try it without data of your
 own.
+
+Working on the package itself, `pkgload::load_all(".")` replaces the
+`library()` call and picks up edits without reinstalling.
 
 ## Tests
 

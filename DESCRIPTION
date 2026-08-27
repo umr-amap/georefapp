@@ -1,0 +1,51 @@
+Package: georefapp
+Type: Package
+Title: Batch Georeferencing of Textual Localities
+Version: 0.1.0
+Authors@R: c(
+      person("Gilles", "Dauby", , "gilles.dauby@ird.fr", role = c("aut", "cre"),
+             comment = c(ORCID = "0000-0002-9498-413X"))
+    )
+Description: Shiny application for georeferencing lists of plain-text localities,
+    with a focus on Central Africa. Localities are imported as a table and grouped
+    into distinct normalised strings, so that each distinct locality is
+    georeferenced once and every record sharing it inherits the result. A
+    georeference is made by drawing a point, circle, line or polygon on a map;
+    the coordinate and its uncertainty are derived from the minimum bounding
+    circle of the drawn footprint, following the point-radius method. Every
+    decision is written to an append-only log held in a local project file, so
+    that the Darwin Core output can be regenerated, audited and revised without
+    ever losing an earlier interpretation.
+License: GPL-2
+Encoding: UTF-8
+Depends: R (>= 4.1)
+Imports:
+    bslib (>= 0.5.0),
+    DBI,
+    dplyr,
+    htmltools,
+    jsonlite,
+    leaflet,
+    leafpm,
+    reactable (>= 0.4.4),
+    readr,
+    readxl,
+    rlang,
+    RSQLite,
+    sf,
+    shiny,
+    shinyWidgets,
+    stats,
+    stringi,
+    tibble,
+    tools,
+    utils
+Suggests:
+    knitr,
+    rmarkdown,
+    stringdist,
+    testthat (>= 3.0.0),
+    withr
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

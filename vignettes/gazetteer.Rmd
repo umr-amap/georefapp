@@ -1,0 +1,267 @@
+---
+title: "Building the gazetteer snapshot"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Building the gazetteer snapshot}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(georefapp)
+```
+
+While you georeference a locality, `georefapp` shows you places elsewhere whose
+name resembles it. Those come from the **gazetteer**: a local, read-only
+snapshot of the locality dictionary, built once and opened as a file. The app
+never queries the live database while you work.
+
+# Quick start
+
+## Build a snapshot
+
+Credentials are read from the environment, never written into a script. Put
+them in `~/.Renviron` (or the project's own `.Renviron`, which is
+gitignored) and restart R:
+
+```
+MYDB_USER=your_user
+MYDB_PASS=your_password
+```
+
+```{r build, eval = FALSE}
+con <- DBI::dbConnect(
+  RPostgres::Postgres(),
+  host = "dg474899-001.dbaas.ovh.net", port = 35699L,
+  dbname = "plots_transects",
+  user = Sys.getenv("MYDB_USER"),
+  password = Sys.getenv("MYDB_PASS")
+)
+
+gazetteer_snapshot_build(con, "rainbio-gazetteer.sqlite", overwrite = TRUE)
+```
+
+About half a minute for the full RAINBIO dictionary, giving a 126 MB file.
+
+`file` follows the base R convention and names the file to write, as in
+`saveRDS()`. A directory is accepted too — the default name is written inside
+it, and the resolved name is returned invisibly either way.
+
+`src` takes a data frame just as readily as a connection, so a dictionary that
+does not live in this database needs no different call — only the same columns.
+
+## Use it
+
+```{r use, eval = FALSE}
+launch(gazetteer = "rainbio-gazetteer.sqlite")
+
+# or set it for a session without launching
+use_gazetteer("rainbio-gazetteer.sqlite")
+```
+
+Running with no gazetteer is fully supported, and is the normal state for most
+of Central Africa — the app shows "no similar locality found", which is what a
+real dictionary returns for a place it does not know.
+
+## Rebuild it when the source changes
+
+After new records are loaded, synonymy is curated, or the view definition is
+edited. The view behind the dictionary is materialized, so refresh it first —
+otherwise the snapshot faithfully reproduces a stale view:
+
+```{r refresh, eval = FALSE}
+DBI::dbExecute(con, "REFRESH MATERIALIZED VIEW rainbio_gazetteer_localities")
+gazetteer_snapshot_build(con, "rainbio-gazetteer.sqlite", overwrite = TRUE)
+```
+
+Each rebuild gets a new snapshot identifier, stamped onto every decision made
+while it is loaded — so a decision always names the dictionary state it was
+made against.
+
+# How it works
+
+## Why a local file
+
+The dictionary lives in PostgreSQL on a server in another country, and the whole
+of it is copied into SQLite rather than queried. Three reasons, in order of how
+much they matter:
+
+1. **A georeferencing session must not stall.** You decide a few hundred
+   localities in a sitting, one lookup each. A slow or unreachable database
+   would interrupt the loop at the worst possible moment.
+2. **A decision has to be reconstructible.** If the dictionary is a moving
+   target on a server, "what was on screen" is unanswerable a year later. If it
+   is a file, it is a file.
+3. **The search needs an index the source does not have** — an inverted index
+   over the whole corpus, built once at snapshot time rather than per query.
+
+The source is one row per locality, keyed on the *canonical* id, so several
+spellings can collapse into one entry. Two things about it are easy to misread:
+
+- **The coordinate is a median, not a georeference.** Nobody decided it; it is
+  the middle of whatever the collectors wrote down. This is why candidates are
+  plotted as bare markers with no uncertainty circle — a radius would dress a
+  summary statistic up as a measurement.
+- **Localities with no coordinates are kept.** Of 360,583 entries, 113,185 have
+  none. A similar name that is itself ungeoreferenced is still evidence, usually
+  that the same place is filed under another spelling. The app lists them greyed
+  and does not plot them.
+
+## Step 1 — tokenising
+
+Each locality string is reduced to a set of words.
+
+```{r tokens}
+locality_tokens("P.N. Odzala. Mbandza, village sur la Lékoli, au NNW de Mbomo")
+```
+
+Characters are normalised — transliterated to ASCII, lowercased, punctuation
+turned into spaces — so `Lékoli` and `Lekoli` become one token. Tokens are
+deduplicated within a locality: a locality is a name, not a document, so a word
+appearing twice is not stronger evidence than a word appearing once.
+
+Two kinds of word are dropped. Single characters go, because the bearings they
+usually stand for are in so many localities that their weight would be
+negligible anyway. Hedges go too:
+
+```{r hedges}
+locality_tokens("env. de Kribi")
+locality_tokens("30 km env. ESE of Kribi")
+```
+
+The hedge list is the one `normalise_locality()` already strips from the front
+of a key, applied wherever the word occurs. The justification is the definition
+already in use: a word that does not change *which place is meant*. This is not
+cosmetic — `env.` is rare enough across the corpus that the weighting below
+treated it as strong evidence, and `env. de Kribi` used to match **`Env. de
+Léopoldville`** at 50%.
+
+Displacement words are deliberately *not* dropped. `km`, `north`, `ESE` change
+the place, so they stay.
+
+## Step 2 — weighting by rarity
+
+A shared word is worth something in proportion to how surprising it is.
+`village` is in tens of thousands of localities and says almost nothing;
+`Odzala` is in a few dozen and says almost everything. The measure is inverse
+document frequency — for a token in `df` localities out of `N`:
+
+$$\mathrm{idf} = \log\left(1 + \frac{N}{df}\right)$$
+
+```{r idf}
+idf <- function(df, N = 360582) log1p(N / df)
+data.frame(
+  token = c("de", "village", "riviere", "kribi", "odzala", "mbandza"),
+  df    = c(180000,   15000,     4000,     900,      40,        12),
+  idf   = round(idf(c(180000, 15000, 4000, 900, 40, 12)), 2)
+)
+```
+
+A word appearing in exactly one locality scores 12.8 — four times `village`,
+eighteen times `de`. That separation is what makes a stoplist unnecessary, and
+it has to be unnecessary here: the corpus mixes French, English, Portuguese and
+local languages, and no hand-written list would cover all four. The corpus
+decides instead.
+
+Words in more than 5% of the corpus are counted but not indexed: they cannot
+discriminate, and searching them would mean scanning tens of thousands of
+entries for nothing. On the real corpus that prunes 10 tokens out of 133,198 —
+words like `de` and `of`. Everything else, `village` included, stays indexed and
+is handled by its weight rather than by exclusion.
+
+## Step 3 — scoring a query
+
+The builder takes a data frame as readily as a connection, so this runs on eight
+real Mbandza localities instead of 360,000:
+
+```{r demo}
+demo <- data.frame(
+  locality_id = 1:8,
+  locality_verbatim = c(
+    "P.N. Odzala. Mbandza, village sur la Lekoli, au NNW de Mbomo",
+    "Parc National d'Odzala. Village Mbandza.",
+    "parc national d'odzola, ancien champ du cacao, village mbandza",
+    "Congo Brazzaville. Layon Mbandza (km I)",
+    "Yangambi, village de la riviere",
+    "Parc National de Lope, village Ipassa",
+    "Kribi, village de peche",
+    "Route de Ouesso, village Liouesso"),
+  is_georeferenced  = c(1L, 1L, 0L, 0L, 1L, 1L, 1L, 0L),
+  decimal_latitude  = c(0.62, 0.63, NA, NA, 0.81, -0.20, 2.94, NA),
+  decimal_longitude = c(14.81, 14.80, NA, NA, 24.49, 11.60, 9.91, NA),
+  n_records         = c(12L, 5L, 3L, 1L, 40L, 7L, 9L, 2L),
+  n_records_georef  = c(12L, 5L, 0L, 0L, 40L, 7L, 9L, 0L),
+  n_distinct_coords = c(4L, 2L, NA, NA, 11L, 3L, 5L, NA),
+  span_deg          = c(0.05, 0.01, NA, NA, 0.4, 0.02, 0.1, NA),
+  n_name_variants   = 1L
+)
+demo$locality_key <- normalise_locality(demo$locality_verbatim)
+
+f <- file.path(tempdir(), "demo-gazetteer.sqlite")
+unlink(f)
+gazetteer_snapshot_build(demo, f, snapshot_id = "demo-1", df_max_frac = 0.5)
+
+gaz <- gazetteer_open(f)
+hits <- gazetteer_search(gaz, "Parc National d'Odzala, village Mbandza",
+                         min_coverage = 0.3)
+hits[, c("locality_verbatim", "is_georeferenced", "coverage", "overlap")]
+```
+
+Every locality sharing an indexed token with the query is scored on the summed
+weight of the tokens they share, and two figures come out:
+
+- **coverage** — the share of the *query's* weight the candidate accounts for.
+  The primary ranking, because the question is "where are the localities that
+  mention this place", not "which localities are worded like this one".
+- **overlap** — the weighted Jaccard index, which penalises a candidate for
+  saying more than the query did. It breaks ties.
+
+The georeferenced entry comes first; its ungeoreferenced near-twin, spelled
+`odzola` and carrying no coordinates, is right behind it. That is exactly the
+case the panel exists to surface.
+
+Overlap penalises *information*, not length — worth knowing before you read a
+ranking:
+
+```{r overlap}
+gazetteer_search(gaz, "Mbandza", min_coverage = 0.3)[
+  , c("locality_verbatim", "coverage", "overlap")]
+```
+
+All four contain the whole query, so overlap decides. `Congo Brazzaville. Layon
+Mbandza (km I)` is by some way the shortest and does not come first: every word
+in it bar `mbandza` is unique in this corpus and carries maximum weight, making
+it a specific other place rather than a variant of the query.
+
+## What it cannot do
+
+Matching is exact on words, so a misspelling is its own rare token:
+
+```{r typo}
+gazetteer_search(gaz, "odzola", min_coverage = 0.3)$locality_verbatim
+```
+
+One hit — the entry sharing the typo. The correctly spelled Odzala localities
+are invisible to it, and vice versa. Closing that gap needs a character-level
+measure over the token vocabulary; token rarity alone cannot repair spelling.
+
+A query made only of common words is reported as unsearchable rather than
+matched against everything:
+
+```{r common}
+none <- gazetteer_search(gaz, "village")
+nrow(none)
+attr(none, "query")$too_common
+```
+
+```{r cleanup, include = FALSE}
+gazetteer_close(gaz)
+unlink(f)
+```
+
+---
+
+A longer walkthrough — every step of the build, the schema, benchmark numbers —
+is kept with the project's internal notes rather than shipped here, and
+`R/gazetteer.R` and `R/tokens.R` carry the same reasoning in comments.

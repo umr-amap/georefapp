@@ -1,0 +1,33 @@
+# RStudio / Positron
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# R CMD build/check artefacts
+*.Rcheck/
+*.tar.gz
+.Rd2pdf*
+
+# Local secrets: MYDB_USER / MYDB_PASS live here, never in the repository.
+.Renviron
+
+# Project stores and gazetteer snapshots are derived data, sometimes hundreds
+# of MB. The store is the user's own working file; the snapshot is rebuilt from
+# the database with gazetteer_snapshot_build().
+*.sqlite
+
+# Local test fixtures
+test.xlsx
+
+# Not published: migration scripts carrying database hosts, internal planning
+# notes, and the archived internals vignette. The package still needs these to
+# build locally -- they are untracked, not deleted.
+#
+# inst/* rather than inst/ because git does not descend into an excluded
+# directory: a bare "inst/" would make the negation below unreachable.
+inst/*
+
+# ...except the example table the import page loads through system.file(),
+# which is shipped package data rather than internal material.
+!inst/extdata/

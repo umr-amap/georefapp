@@ -113,9 +113,13 @@ import_server <- function(id) {
 
     output$summary <- shiny::renderUI({
       recs <- shiny::req(records_r())
-      n_key <- length(unique(stats::na.omit(recs$locality_key)))
-      n_blank <- sum(is.na(recs$locality_key))
+      # Blank localities carry the sentinel key, not NA, by the time they get
+      # here; counting NAs found none and the warning below never showed.
+      blank <- recs$locality_key == no_locality_key
+      n_key <- length(unique(recs$locality_key[!blank]))
+      n_blank <- sum(blank)
       shiny::tagList(
+        id_issue_alert(attr(recs, "id_issue")),
         shinyWidgets::alert(
           status = "info",
           shiny::tags$b(format(nrow(recs), big.mark = " ")), "records collapse to",
@@ -129,8 +133,11 @@ import_server <- function(id) {
         if (n_blank > 0) {
           shinyWidgets::alert(
             status = "warning",
-            format(n_blank, big.mark = " "),
-            "records have no usable locality text and will be carried through with empty coordinates."
+            sprintf(
+              "%s %s no usable locality text and will be carried through with empty coordinates.",
+              format(n_blank, big.mark = " "),
+              if (n_blank > 1) "records have" else "record has"
+            )
           )
         }
       )
@@ -346,9 +353,12 @@ build_records <- function(dat, col_locality, col_id = NULL,
   verbatim[is.na(verbatim) | !nzchar(verbatim)] <- NA_character_
 
   ids <- if (!is.null(col_id)) as.character(dat[[col_id]]) else sprintf("r%06d", seq_len(nrow(dat)))
-  # Duplicate or missing identifiers would silently collide in the store, and
-  # the record identifier is what ties the output back to the user's own data.
-  if (anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) > 0) {
+  # Duplicate or missing identifiers would silently collide in the store, so
+  # they are replaced by row numbers. That breaks the user's way of joining the
+  # output back to their own table, so the problem is kept and reported rather
+  # than papered over.
+  id_issue <- if (!is.null(col_id)) record_id_issue(ids, col_id) else NULL
+  if (!is.null(id_issue)) {
     ids <- sprintf("r%06d", seq_len(nrow(dat)))
   }
 
@@ -375,7 +385,31 @@ build_records <- function(dat, col_locality, col_id = NULL,
     stringsAsFactors = FALSE
   )
   attr(out, "source_name") <- attr(dat, "source_name")
+  attr(out, "id_issue") <- id_issue
   out
+}
+
+#' Check that an identifier column can identify records
+#'
+#' @param ids Identifier values, as character.
+#' @param column Name of the column they came from.
+#'
+#' @return `NULL` when every value is present and unique; otherwise a list
+#'   with `column`, `n_missing` (blank or missing values), `n_duplicated`
+#'   (rows whose value occurs more than once) and `examples` (up to three
+#'   repeated values).
+#' @noRd
+record_id_issue <- function(ids, column) {
+  missing <- is.na(ids) | !nzchar(trimws(ids))
+  present <- ids[!missing]
+  repeated <- present %in% present[duplicated(present)]
+  if (!any(missing) && !any(repeated)) return(NULL)
+  list(
+    column = column,
+    n_missing = sum(missing),
+    n_duplicated = sum(repeated),
+    examples = utils::head(unique(present[repeated]), 3L)
+  )
 }
 
 #' Guess which column the user means
@@ -434,4 +468,34 @@ project_path <- function(name) {
 #' @noRd
 example_localities_path <- function() {
   system.file("extdata", "example_localities.csv", package = "georefapp")
+}
+
+#' Warn that identifiers were replaced by row numbers
+#'
+#' @param issue Result of [record_id_issue()], or `NULL`.
+#'
+#' @return An alert, or `NULL`.
+#' @noRd
+id_issue_alert <- function(issue) {
+  if (is.null(issue)) return(NULL)
+  problems <- c(
+    if (issue$n_missing > 0) {
+      sprintf("%s row%s %s no value", format(issue$n_missing, big.mark = " "),
+              if (issue$n_missing > 1) "s" else "", if (issue$n_missing > 1) "have" else "has")
+    },
+    if (issue$n_duplicated > 0) {
+      sprintf("%s rows share a value with another row (e.g. %s)",
+              format(issue$n_duplicated, big.mark = " "),
+              paste0("‘", issue$examples, "’", collapse = ", "))
+    }
+  )
+  shinyWidgets::alert(
+    status = "danger",
+    shiny::tags$b(sprintf("The column ‘%s’ cannot identify your records:", issue$column)),
+    paste0(paste(problems, collapse = "; "), "."),
+    shiny::tags$br(),
+    "Row numbers (r000001, r000002, …) will be used as record identifiers instead, so the",
+    "results can only be joined back to this file by row order, not by your own identifiers.",
+    "Choose a column with a unique value on every row, or fix the file and load it again."
+  )
 }

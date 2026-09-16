@@ -446,3 +446,56 @@ test_that("saving locally writes the exports beside the project file", {
     }
   )
 })
+
+test_that("identifiers that cannot identify records are reported, with what is wrong", {
+  expect_null(record_id_issue(c("a", "b", "c"), "id"))
+
+  issue <- record_id_issue(c("a", "b", "b", NA, "", "c", "c", "c"), "barcode")
+  expect_equal(issue$column, "barcode")
+  expect_equal(issue$n_missing, 2L)
+  # Every row carrying a repeated value counts, not only the second copy.
+  expect_equal(issue$n_duplicated, 5L)
+  expect_equal(issue$examples, c("b", "c"))
+
+  dat <- data.frame(loc = c("Kribi", "Yangambi", "Irangi"),
+                    barcode = c("P001", "P001", "P002"))
+  recs <- build_records(dat, col_locality = "loc", col_id = "barcode")
+  expect_equal(recs$record_id, c("r000001", "r000002", "r000003"))
+  expect_equal(attr(recs, "id_issue")$n_duplicated, 2L)
+
+  # Generating identifiers on purpose is not a problem to report.
+  expect_null(attr(build_records(dat, col_locality = "loc"), "id_issue"))
+  expect_null(attr(build_records(dat[-2, ], col_locality = "loc", col_id = "barcode"), "id_issue"))
+
+  text <- as.character(id_issue_alert(issue))
+  expect_match(text, "barcode", fixed = TRUE)
+  expect_match(text, "2 rows have no value", fixed = TRUE)
+  expect_match(text, "5 rows share a value", fixed = TRUE)
+  expect_match(text, "joined back to this file by row order", fixed = TRUE)
+})
+
+test_that("the import page warns about unusable identifiers and blank localities", {
+  dir <- withr::local_tempdir()
+  withr::local_dir(dir)
+
+  shiny::testServer(import_server, {
+    session$setInputs(use_example = 1)
+    session$setInputs(col_locality = "locality", col_id = "catalog_number",
+                      col_country = "", col_admin1 = "")
+    summary_text <- function() {
+      gsub("[[:space:]]+", " ", as.character(output$summary$html))
+    }
+    html <- summary_text()
+    expect_false(grepl("cannot identify your records", html, fixed = TRUE))
+    # The example has one record with no locality text; this warning used to
+    # count NA keys, which the sentinel had already replaced, and never showed.
+    expect_match(html, "1 record has no usable locality text", fixed = TRUE)
+    expect_match(html, "<b>12</b> distinct localities", fixed = TRUE)
+
+    # Country repeats across rows, so as an identifier it collides.
+    session$setInputs(col_id = "country")
+    html <- summary_text()
+    expect_match(html, "cannot identify your records", fixed = TRUE)
+    expect_match(html, "country", fixed = TRUE)
+  })
+})

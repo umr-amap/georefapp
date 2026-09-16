@@ -151,16 +151,18 @@ local SQLite snapshot with its index built in — 360,582 localities, 126 MB,
 20–70 ms per search — and every decision records which snapshot it was made
 against.
 
-Credentials come from `MYDB_USER` / `MYDB_PASS` in `~/.Renviron`, never from a
-script. See `vignette("gazetteer")` for what the build does at each step.
+Building it needs an account on the database, and the connection goes through
+[CafriplotsR](https://github.com/umr-amap/cafriplotsR), which knows where the
+database lives and handles credentials: it reads `MYDB_USER` / `MYDB_PASS` from
+`~/.Renviron` (`CafriplotsR::setup_db_credentials()` writes them) and asks for
+them otherwise. See `vignette("gazetteer")` for what the build does at each
+step.
 
 ```r
-con <- DBI::dbConnect(
-  RPostgres::Postgres(),
-  host = "dg474899-001.dbaas.ovh.net", port = 35699L, dbname = "plots_transects",
-  user = Sys.getenv("MYDB_USER"), password = Sys.getenv("MYDB_PASS")
-)
+# remotes::install_github("umr-amap/cafriplotsR", upgrade = "never")
+con <- CafriplotsR::call.mydb()
 gazetteer_snapshot_build(con, "rainbio-gazetteer.sqlite", overwrite = TRUE)
+CafriplotsR::cleanup_connections()
 ```
 
 Running without a dictionary is fully supported, and is the normal state for

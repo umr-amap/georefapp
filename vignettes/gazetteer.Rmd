@@ -21,23 +21,18 @@ never queries the live database while you work.
 
 ## Build a snapshot
 
-Credentials are read from the environment, never written into a script. Put
-them in `~/.Renviron` (or the project's own `.Renviron`, which is
-gitignored) and restart R:
+The connection goes through
+[CafriplotsR](https://github.com/umr-amap/cafriplotsR), which knows where the
+database lives. Credentials are never written into a script: CafriplotsR reads
+`MYDB_USER` and `MYDB_PASS` from `~/.Renviron`, and asks for them when they are
+not set. To store them once:
 
-```
-MYDB_USER=your_user
-MYDB_PASS=your_password
+```{r credentials, eval = FALSE}
+CafriplotsR::setup_db_credentials()   # then restart R
 ```
 
 ```{r build, eval = FALSE}
-con <- DBI::dbConnect(
-  RPostgres::Postgres(),
-  host = "dg474899-001.dbaas.ovh.net", port = 35699L,
-  dbname = "plots_transects",
-  user = Sys.getenv("MYDB_USER"),
-  password = Sys.getenv("MYDB_PASS")
-)
+con <- CafriplotsR::call.mydb()
 
 gazetteer_snapshot_build(con, "rainbio-gazetteer.sqlite", overwrite = TRUE)
 ```
@@ -71,8 +66,10 @@ edited. The view behind the dictionary is materialized, so refresh it first —
 otherwise the snapshot faithfully reproduces a stale view:
 
 ```{r refresh, eval = FALSE}
+con <- CafriplotsR::call.mydb()
 DBI::dbExecute(con, "REFRESH MATERIALIZED VIEW rainbio_gazetteer_localities")
 gazetteer_snapshot_build(con, "rainbio-gazetteer.sqlite", overwrite = TRUE)
+CafriplotsR::cleanup_connections()
 ```
 
 Each rebuild gets a new snapshot identifier, stamped onto every decision made

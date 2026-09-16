@@ -195,37 +195,135 @@ Working on the package itself, `pkgload::load_all(".")` replaces the
 
 ## Getting your results
 
-Your work lives in the **project file**, a `.sqlite` file created on the
-Import page, by default in R's working directory. Every decision is written to
-it the moment you save, so there is nothing to save at the end and nothing lost
-if you close the browser half-way. The navbar shows which file is open, with a
-link to copy its full path.
+### Where your work is saved
+
+Your work lives in the **project file**, a `.sqlite` file created on the Import
+page, by default in R's working directory. Every decision is written to it the
+moment you click *Save georeference*, so there is no "save" step at the end and
+nothing is lost if you close the browser half-way. The navbar shows which file
+is open, with a link to copy its full path.
 
 To **carry on later**, launch the app again: the Import page lists the projects
 in the working directory (or takes a path to one elsewhere) under *Continue a
 project*. Creating a new project under a name that already exists asks whether
 to open it instead.
 
-When the last locality is decided, the app says so and offers to go to the
-**Export** page; the workbench header also has an *Export results* link at any
-stage. The Export page produces three files, named after the project:
+The project file is not the result you share: it is the source the results are
+built from. Keep it, though — it is what lets the results be rebuilt, checked
+and revised later.
 
-| File | What it is for |
+### Exporting
+
+1. Open the **Export** page. The app offers to take you there when the last
+   locality is decided, and the *Export results →* link above the locality list
+   goes there at any time.
+2. Check the summary at the top: how many records are georeferenced, how many
+   localities are still pending or were marked unresolvable.
+3. Get the files:
+   - Running locally with `launch()`, click **Save all files next to the
+     project**. The three files are written into the project's folder, and the
+     page lists what it wrote.
+   - Or use the three **download** buttons, which save to your browser's
+     download folder. These are the only option when the app runs on a server.
+
+You do not have to finish first. An export reflects the project as it stands,
+and exporting again after more work or a revision simply produces up-to-date
+files; nothing is changed in the project by exporting.
+
+### What you get
+
+Three files, named after the project and the day of export, e.g.
+`odzala_dwc_20260916.csv`:
+
+| File | What it is | Use it for |
+|---|---|---|
+| `<project>_dwc_<date>.csv` | The Darwin Core table: one row per imported record. | Your dataset, database or publication. |
+| `<project>_log_<date>.csv` | Every decision ever made, revisions included. | The audit trail. Publish it alongside the table. |
+| `<project>_footprints_<date>.gpkg` | The shapes behind the decisions, as map layers. | Checking and mapping in QGIS or ArcGIS. |
+
+The CSV files are UTF-8, comma-separated, with empty cells for missing values.
+
+#### The Darwin Core table
+
+One row for **every record you imported**, including the ones not yet
+georeferenced, so it always lines up with your original table.
+
+| Column | Content |
 |---|---|
-| `<project>_dwc_<date>.csv` | The Darwin Core table: one row per imported record, with coordinates and uncertainty. The table for your dataset. |
-| `<project>_log_<date>.csv` | Every decision ever made, revisions included. The audit trail; publish it with the table. |
-| `<project>_footprints_<date>.gpkg` | The footprints as map layers (`polygons`, and `lines` if any), for QGIS or ArcGIS. |
+| `recordID` | The identifier from the column you chose at import — or, if you chose none, `r000001`, `r000002`… in the row order of your file. |
+| `verbatimLocality`, `country` | As imported. |
+| `decimalLatitude`, `decimalLongitude` | The georeferenced coordinate (WGS84). |
+| `coordinateUncertaintyInMeters` | Radius of the circle enclosing everything the locality could mean. |
+| `pointRadiusSpatialFit` | Circle area ÷ footprint area; empty for lines. |
+| `footprintWKT`, `footprintSRS` | The shape itself, as WKT in EPSG:4326. For an area, this *is* the locality. |
+| `geodeticDatum`, `coordinatePrecision` | `EPSG:4326` and `1e-07`. |
+| `georeferencedBy`, `georeferencedDate`, `georeferenceProtocol`, `georeferenceSources`, `georeferenceRemarks` | Who decided, when, by what method, from what sources, and why. |
+| `georefappDecisionID` | The decision in the log that produced this row. |
+| `georefappDecisionType` | `drawn`, `area`, `unresolvable`, or empty if still pending. |
 
-Run with `launch()`, **Save all files next to the project** writes them into
-the project's folder and lists what it wrote; the download buttons work
-everywhere. The same export is available from the console:
+Coordinates are empty in two cases, which `georefappDecisionType` tells apart:
+empty means nobody has decided the locality yet; `unresolvable` means someone
+looked and could not, with the reason in `georeferenceRemarks`.
+
+The column names and meanings follow Darwin Core and match
+[GeoPick](https://geopick.gbif.org), so the table can be loaded wherever GeoPick
+output is accepted.
+
+#### Joining the results back to your data
+
+The export carries the georeference, not the rest of your original columns. To
+put them back together, join on `recordID`:
 
 ```r
-export_project("georef_20260916.sqlite")
+original <- readr::read_csv("my_specimens.csv")
+georef   <- readr::read_csv("odzala_dwc_20260916.csv")
+merged   <- dplyr::left_join(original, georef, by = c("catalog_number" = "recordID"))
 ```
 
-All three are rebuilt from the project file each time, so exporting early,
-often, or again after a revision is always safe.
+This is why choosing your own identifier column at import matters. If none was
+chosen, `recordID` follows row order, and the join must be done by position on
+the unmodified file. The same happens if the chosen column has blanks or
+repeated values, since those cannot tell records apart; the Import page then
+shows a red warning naming the problem, before the project is created, so you
+can pick another column or fix the file first.
+
+#### The decision log
+
+One row per decision, **including superseded ones**: when a locality is
+revised, the earlier decision stays, and the new one names it in `supersedes`.
+The Darwin Core table uses only the latest decision for each locality; the log
+shows how it got there. Besides the georeference itself it records
+`locality_key` (the normalised grouping the decision applies to), `centre_rule`,
+`app_version`, `gazetteer_snapshot` (which locality dictionary was on screen)
+and `created_at`.
+
+#### The footprints
+
+A GeoPackage with one feature per decided locality: a `polygons` layer for
+areas, circles and drawn shapes, and a `lines` layer if any locality was drawn
+as a line. Each feature carries the coordinate, uncertainty, decision type,
+provenance, and `nRecords`, the number of records that inherit it. Unresolvable
+and pending localities have no shape and are not included.
+
+### From the R console
+
+The same three files, without opening the app:
+
+```r
+library(georefapp)
+export_project("odzala.sqlite")                  # next to the project file
+export_project("odzala.sqlite", dir = "results") # or somewhere else
+```
+
+Or work with the tables directly:
+
+```r
+con <- store_open("odzala.sqlite")
+dwc <- dwc_table(con)        # the Darwin Core table
+log <- store_decisions(con)  # the decision log
+fp  <- dwc_footprints(con)   # list of sf layers: fp$polygons, fp$lines
+store_close(con)
+```
 
 ## Tests
 

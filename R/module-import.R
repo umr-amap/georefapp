@@ -1,14 +1,16 @@
-#' Import module: read a locality table and create a project
+#' Import module: open a project, or create one from a locality table
 #'
-#' Reads a delimited or Excel file, lets the user say which column holds the
-#' locality text, and writes the resulting records into a new project file.
+#' Lists the projects already in the working directory so that work can be
+#' resumed. Otherwise reads a delimited or Excel file, lets the user say which
+#' column holds the locality text, and writes the resulting records into a new
+#' project file -- asking first if a project of that name already exists.
 #'
 #' @param id Module id.
 #'
 #' @return
 #'  * UI: HTML tags for the import page.
 #'  * Server: a [shiny::reactiveVal()] holding the path of the project that was
-#'    created, or `NULL` before one exists.
+#'    created or opened, or `NULL` before there is one.
 #'
 #' @name module-import
 #'
@@ -18,7 +20,11 @@ import_ui <- function(id) {
   bslib::layout_columns(
     col_widths = c(4, 8),
     bslib::card(
-      bslib::card_header("1. Locality table"),
+      bslib::card_header("Project"),
+      shiny::tags$h6("Continue a project"),
+      shiny::uiOutput(ns("existing")),
+      shiny::tags$hr(),
+      shiny::tags$h6("Or start a new one: 1. Locality table"),
       shiny::fileInput(
         ns("file"), "CSV, TSV or Excel file",
         accept = c(".csv", ".tsv", ".txt", ".xlsx", ".xls"), width = "100%"
@@ -155,8 +161,10 @@ import_server <- function(id) {
           value = default_project_name(), width = "100%"
         ),
         shiny::helpText(
-          "Written to the working directory. This file holds the records, every",
-          "decision you make, and their history."
+          "Saved in", shiny::tags$code(normalizePath(getwd(), winslash = "/")),
+          "unless you type a full path. This file holds the records and every",
+          "decision you make, saved as you go; open it again from this page to",
+          "carry on."
         ),
         shiny::actionButton(
           ns("create_btn"), "Create project and start georeferencing",
@@ -165,9 +173,69 @@ import_server <- function(id) {
       )
     })
 
-    shiny::observeEvent(input$create_btn, {
+    # -- Continue a project -----------------------------------------------------
+
+    # Listed from the working directory, where new projects are written, so the
+    # project a user made last time is simply there to pick. Re-listed whenever
+    # a project is created or opened.
+    projects_r <- shiny::reactive({
+      project_rv()
+      find_projects(getwd())
+    })
+
+    output$existing <- shiny::renderUI({
+      found <- projects_r()
+      shiny::tagList(
+        if (nrow(found) > 0) {
+          labels <- sprintf(
+            "%s  (%s records, %s decisions, %s)", found$name,
+            format(found$n_records, big.mark = " "),
+            format(found$n_decisions, big.mark = " "),
+            format(found$modified, "%Y-%m-%d %H:%M")
+          )
+          shiny::selectInput(ns("open_existing"), NULL,
+                             choices = stats::setNames(found$path, labels),
+                             width = "100%")
+        } else {
+          shiny::helpText("No project in the working directory.")
+        },
+        shiny::textInput(
+          ns("open_path"), NULL, width = "100%",
+          placeholder = "…or the full path to a project file elsewhere"
+        ),
+        shiny::actionButton(ns("open_btn"), "Open project",
+                            class = "btn-outline-primary", width = "100%")
+      )
+    })
+
+    open_project <- function(path) {
+      if (!is_project_file(path)) {
+        shiny::showNotification(
+          paste("Not a georefapp project:", path), type = "error", duration = 8
+        )
+        return(invisible(FALSE))
+      }
+      # Cleared first, so that reopening the project already open still counts
+      # as a change and takes the user back to the workbench.
+      project_rv(NULL)
+      project_rv(normalizePath(path, winslash = "/"))
+      invisible(TRUE)
+    }
+
+    shiny::observeEvent(input$open_btn, {
+      typed <- as_chr1(input$open_path)
+      path <- if (!is.na(typed)) project_path(typed) else as_chr1(input$open_existing)
+      if (is.na(path)) {
+        shiny::showNotification("Choose a project to open.", type = "warning")
+        return()
+      }
+      open_project(path)
+    })
+
+    # -- Create a project -------------------------------------------------------
+
+    create_project <- function(path) {
       recs <- shiny::req(records_r())
-      path <- project_path(input$project_name)
       ok <- shinyWidgets::execute_safely({
         con <- store_open(path)
         on.exit(store_close(con), add = TRUE)
@@ -176,7 +244,63 @@ import_server <- function(id) {
         store_meta_set(con, "imported_at", iso_now())
         TRUE
       })
-      if (isTRUE(ok)) project_rv(path)
+      if (isTRUE(ok)) {
+        project_rv(NULL)
+        project_rv(path)
+      }
+    }
+
+    pending_path_rv <- shiny::reactiveVal(NULL)
+
+    shiny::observeEvent(input$create_btn, {
+      shiny::req(records_r())
+      path <- project_path(input$project_name)
+      if (!file.exists(path)) return(create_project(path))
+
+      if (!is_project_file(path)) {
+        shiny::showNotification(
+          paste(basename(path), "already exists and is not a georefapp project. Choose another name."),
+          type = "error", duration = 8
+        )
+        return()
+      }
+      # Creating over an existing project used to replace its records without
+      # a word. Its decisions survived, but the user had no way of knowing that
+      # they had just reopened old work rather than started new.
+      n <- project_counts(path)
+      pending_path_rv(path)
+      shiny::showModal(shiny::modalDialog(
+        title = "This project already exists",
+        shiny::tags$p(
+          shiny::tags$b(basename(path)), sprintf(
+            "already holds %s records and %s decisions.",
+            format(n$n_records, big.mark = " "), format(n$n_decisions, big.mark = " ")
+          )
+        ),
+        shiny::tags$p(
+          "Open it to carry on where you left off. Re-importing replaces its",
+          "records with this table and keeps every decision, which is the way to",
+          "bring in a corrected table. To start afresh, cancel and choose another name."
+        ),
+        footer = shiny::tagList(
+          shiny::modalButton("Cancel"),
+          shiny::actionButton(ns("reimport_btn"), "Re-import records",
+                              class = "btn-outline-danger"),
+          shiny::actionButton(ns("open_instead_btn"), "Open it", class = "btn-primary")
+        )
+      ))
+    })
+
+    shiny::observeEvent(input$open_instead_btn, {
+      shiny::removeModal()
+      shiny::req(pending_path_rv())
+      open_project(pending_path_rv())
+    })
+
+    shiny::observeEvent(input$reimport_btn, {
+      shiny::removeModal()
+      shiny::req(pending_path_rv())
+      create_project(pending_path_rv())
     })
 
     project_rv

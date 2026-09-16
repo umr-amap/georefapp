@@ -18,7 +18,8 @@ the result.
    bounding circle of what you drew, using the point-radius method. A locality
    that is itself an area — a park, a plot network — can instead be imported
    from a GIS file and recorded as that area; see [Areas](#areas).
-3. **Export** a Darwin Core table, plus the decision log that backs it.
+3. **Export** a Darwin Core table, the decision log that backs it, and the
+   footprints as a GeoPackage; see [Getting your results](#getting-your-results).
 
 ## Installation
 
@@ -191,6 +192,40 @@ Pass `stop_on_close = FALSE` to keep the app running and stop it with Esc.
 
 Working on the package itself, `pkgload::load_all(".")` replaces the
 `library()` call and picks up edits without reinstalling.
+
+## Getting your results
+
+Your work lives in the **project file**, a `.sqlite` file created on the
+Import page, by default in R's working directory. Every decision is written to
+it the moment you save, so there is nothing to save at the end and nothing lost
+if you close the browser half-way. The navbar shows which file is open, with a
+link to copy its full path.
+
+To **carry on later**, launch the app again: the Import page lists the projects
+in the working directory (or takes a path to one elsewhere) under *Continue a
+project*. Creating a new project under a name that already exists asks whether
+to open it instead.
+
+When the last locality is decided, the app says so and offers to go to the
+**Export** page; the workbench header also has an *Export results* link at any
+stage. The Export page produces three files, named after the project:
+
+| File | What it is for |
+|---|---|
+| `<project>_dwc_<date>.csv` | The Darwin Core table: one row per imported record, with coordinates and uncertainty. The table for your dataset. |
+| `<project>_log_<date>.csv` | Every decision ever made, revisions included. The audit trail; publish it with the table. |
+| `<project>_footprints_<date>.gpkg` | The footprints as map layers (`polygons`, and `lines` if any), for QGIS or ArcGIS. |
+
+Run with `launch()`, **Save all files next to the project** writes them into
+the project's folder and lists what it wrote; the download buttons work
+everywhere. The same export is available from the console:
+
+```r
+export_project("georef_20260916.sqlite")
+```
+
+All three are rebuilt from the project file each time, so exporting early,
+often, or again after a revision is always safe.
 
 ## Tests
 

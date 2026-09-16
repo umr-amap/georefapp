@@ -4,7 +4,7 @@
 \alias{module-import}
 \alias{import_ui}
 \alias{import_server}
-\title{Import module: read a locality table and create a project}
+\title{Import module: open a project, or create one from a locality table}
 \usage{
 import_ui(id)
 
@@ -16,9 +16,11 @@ import_server(id)
 \value{
 * UI: HTML tags for the import page.
  * Server: a [shiny::reactiveVal()] holding the path of the project that was
-   created, or `NULL` before one exists.
+   created or opened, or `NULL` before there is one.
 }
 \description{
-Reads a delimited or Excel file, lets the user say which column holds the
-locality text, and writes the resulting records into a new project file.
+Lists the projects already in the working directory so that work can be
+resumed. Otherwise reads a delimited or Excel file, lets the user say which
+column holds the locality text, and writes the resulting records into a new
+project file -- asking first if a project of that name already exists.
 }

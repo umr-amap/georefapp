@@ -92,6 +92,17 @@ ellipsoidal reference, not the s2 default.
   names one source for the footprint. The feature pick is held server-side
   (`area_pick_rv`) because clearing a selectize is a browser round trip, and
   until it returns the previous locality's area would still be savable.
+- **Modules don't navigate.** `workbench_server(on_export = )` takes a callback
+  and `georef_server()` does the `nav_select()`; a module does not know the page
+  around it. Export offers "save next to the project" only with
+  `local_files = TRUE`, which `launch()` passes and `app.R` must not.
+- **Setting `project_rv` goes through `NULL` first** so reopening the project
+  already open still fires and returns to the workbench.
+- **`is_project_file()` checks the SQLite header before connecting.** Opening a
+  missing path with RSQLite creates an empty database, and a gazetteer snapshot
+  is SQLite too; a project is one holding `records` and `decisions`.
+- **`withr::defer()` inside a `testServer()` expression never runs** — close
+  connections explicitly there.
 - **reactable selection** is read with `getReactableState("localities",
   "selected")` using the *bare* id inside a module — it reads `session$input`,
   which is already unnamespaced.

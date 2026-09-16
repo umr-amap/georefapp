@@ -41,11 +41,14 @@ georef_ui <- function() {
 #'   server, one user closing a tab must not take the application down for
 #'   everyone. [launch()] turns it on, because there the browser is the only
 #'   client and leaving R blocked on a dead app helps nobody.
+#' @param local_files Offer to write exports next to the project file, rather
+#'   than only as browser downloads. Defaults to `FALSE`: on a server the
+#'   project folder is the server's, not the user's. [launch()] turns it on.
 #'
 #' @return A Shiny server function.
 #'
 #' @export
-georef_server <- function(stop_on_close = FALSE) {
+georef_server <- function(stop_on_close = FALSE, local_files = FALSE) {
   # Counted here rather than inside the session function: the decision to stop
   # is about the application, so it has to outlive any one session.
   open_sessions <- 0L
@@ -91,15 +94,32 @@ georef_server <- function(stop_on_close = FALSE) {
       bslib::nav_select("nav", "workbench", session = session)
     })
 
-    refresh_r <- workbench_server("workbench", con_r = con_rv)
-    export_server("export", con_r = con_rv, refresh_r = refresh_r)
+    refresh_r <- workbench_server(
+      "workbench", con_r = con_rv,
+      on_export = function() bslib::nav_select("nav", "export", session = session)
+    )
+    export_server("export", con_r = con_rv, refresh_r = refresh_r,
+                  project_r = project_r, local_files = local_files)
 
+    # The project file is where the work lives, so where it is stays on screen.
     output$project_label <- shiny::renderUI({
       path <- project_r()
       if (is.null(path)) {
         return(htmltools::tags$span(class = "navbar-text text-muted small", "no project"))
       }
-      htmltools::tags$span(class = "navbar-text small", basename(path))
+      htmltools::tags$span(
+        class = "navbar-text small", title = path,
+        "Project ", htmltools::tags$b(basename(path)),
+        htmltools::tags$span(class = "text-muted", " · saved as you go · "),
+        htmltools::tags$a(
+          href = "#", class = "text-decoration-none",
+          onclick = sprintf(
+            "navigator.clipboard.writeText(%s); this.textContent = 'path copied'; return false;",
+            jsonlite::toJSON(path, auto_unbox = TRUE)
+          ),
+          "copy path"
+        )
+      )
     })
   }
 }
@@ -163,7 +183,7 @@ launch <- function(port = 5792, launch.browser = TRUE,
   }
   app <- shiny::shinyApp(
     ui = georef_ui(),
-    server = georef_server(stop_on_close = stop_on_close)
+    server = georef_server(stop_on_close = stop_on_close, local_files = TRUE)
   )
   shiny::runApp(app, port = port, launch.browser = launch.browser, ...)
 }

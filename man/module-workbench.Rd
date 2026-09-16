@@ -8,13 +8,17 @@
 \usage{
 workbench_ui(id)
 
-workbench_server(id, con_r)
+workbench_server(id, con_r, on_export = NULL)
 }
 \arguments{
 \item{id}{Module id.}
 
 \item{con_r}{A [shiny::reactive()] returning the open project connection, or
 `NULL` when no project is open.}
+
+\item{on_export}{Function called, with no arguments, when the user asks to
+go to their results. The workbench does not know the page layout around
+it, so moving there is the caller's job.}
 }
 \value{
 * UI: HTML tags for the workbench page.

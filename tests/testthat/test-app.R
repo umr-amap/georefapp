@@ -55,10 +55,14 @@ test_that("the import module builds a project from the bundled example", {
     expect_true(file.exists(path))
 
     con <- store_open(path)
-    withr::defer(store_close(con))
-    expect_equal(nrow(store_localities(con)), 12L)
+    # Closed explicitly: a withr::defer() here is scoped to the testServer
+    # expression's environment, which is never torn down, so it never ran.
+    n_localities <- nrow(store_localities(con))
+    n_rows <- nrow(dwc_table(con))
+    store_close(con)
+    expect_equal(n_localities, 12L)
     # The record with no locality text is kept, and is not offered as work.
-    expect_equal(nrow(dwc_table(con)), 24L)
+    expect_equal(n_rows, 24L)
   })
 })
 
@@ -321,4 +325,124 @@ test_that("a line cannot be saved as an area", {
     session$setInputs(save = 1)
     expect_equal(nrow(store_decisions(con)), 0L)
   })
+})
+
+test_that("a project in the working directory can be reopened", {
+  dir <- withr::local_tempdir()
+  withr::local_dir(dir)
+  con <- store_open(file.path(dir, "earlier.sqlite"))
+  store_write_records(con, data.frame(record_id = "a", locality_key = "kribi",
+                                      verbatim_locality = "Kribi"))
+  store_close(con)
+
+  shiny::testServer(import_server, {
+    found <- projects_r()
+    expect_equal(found$name, "earlier.sqlite")
+    session$setInputs(open_existing = found$path[1], open_path = "", open_btn = 1)
+    expect_equal(session$returned(), found$path[1])
+  })
+})
+
+test_that("a typed path that is not a project is refused", {
+  dir <- withr::local_tempdir()
+  withr::local_dir(dir)
+  shiny::testServer(import_server, {
+    session$setInputs(open_path = file.path(dir, "absent.sqlite"), open_btn = 1)
+    expect_null(session$returned())
+    expect_false(file.exists(file.path(dir, "absent.sqlite")))
+  })
+})
+
+test_that("creating over an existing project asks before touching it", {
+  dir <- withr::local_tempdir()
+  withr::local_dir(dir)
+  path <- file.path(dir, "same.sqlite")
+  con <- store_open(path)
+  store_write_records(con, data.frame(record_id = "old", locality_key = "kribi",
+                                      verbatim_locality = "Kribi"))
+  store_close(con)
+
+  shiny::testServer(import_server, {
+    session$setInputs(use_example = 1)
+    session$setInputs(col_locality = "locality", col_id = "catalog_number",
+                      col_country = "", col_admin1 = "")
+    session$setInputs(project_name = "same", create_btn = 1)
+    # Nothing written, nothing opened: the user is asked first.
+    expect_null(session$returned())
+    expect_equal(project_counts(path)$n_records, 1L)
+
+    session$setInputs(open_instead_btn = 1)
+    expect_equal(basename(session$returned()), "same.sqlite")
+    expect_equal(project_counts(path)$n_records, 1L)
+
+    session$setInputs(reimport_btn = 1)
+    expect_equal(project_counts(path)$n_records, 24L)
+  })
+})
+
+test_that("deciding the last pending locality announces the end and leads to export", {
+  con <- local_con(c("Yangambi", "Kribi"))
+  went <- 0L
+  count_visit <- function() went <<- went + 1L
+
+  shiny::testServer(
+    workbench_server,
+    args = list(con_r = shiny::reactive(con), on_export = count_visit),
+    {
+      session$setInputs(localities__reactable__selected = 1L, radius_m = 1000)
+      session$setInputs(map_draw_new_feature = drawn_circle(1, 24.4667, 0.8167, 5000))
+      session$setInputs(save = 1)
+      expect_false(finished_rv())
+
+      session$setInputs(localities__reactable__selected = 2L)
+      session$setInputs(map_draw_new_feature = drawn_circle(2, 9.9, 2.9, 5000))
+      session$setInputs(save = 2)
+      expect_true(finished_rv())
+
+      session$setInputs(go_export_modal = 1)
+      expect_equal(went, 1L)
+      session$setInputs(go_export_header = 1)
+      expect_equal(went, 2L)
+    }
+  )
+})
+
+test_that("revising a finished project does not announce the end again", {
+  con <- local_con("Yangambi")
+  pt <- sf::st_sfc(sf::st_point(c(24.5, 0.77)), crs = 4326)
+  store_add_decision(con, "yangambi", "drawn", georef_metrics(pt, point_radius_m = 1000))
+
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+    session$setInputs(localities__reactable__selected = 1L, radius_m = 1000)
+    session$setInputs(map_draw_new_feature = drawn_circle(1, 24.4667, 0.8167, 5000))
+    session$setInputs(save = 1)
+    expect_equal(nrow(store_decisions(con)), 2L)
+    expect_false(finished_rv())
+  })
+})
+
+test_that("saving locally writes the exports beside the project file", {
+  dir <- withr::local_tempdir()
+  path <- file.path(dir, "field2026.sqlite")
+  con <- store_open(path)
+  withr::defer(store_close(con))
+  store_write_records(con, data.frame(record_id = c("a", "b"),
+                                      locality_key = c("kribi", "irangi"),
+                                      verbatim_locality = c("Kribi", "Irangi")))
+  pt <- sf::st_sfc(sf::st_point(c(9.9, 2.9)), crs = 4326)
+  store_add_decision(con, "kribi", "drawn", georef_metrics(pt, point_radius_m = 1000))
+
+  shiny::testServer(
+    export_server,
+    args = list(con_r = shiny::reactive(con), refresh_r = shiny::reactive(0),
+                project_r = shiny::reactive(path), local_files = TRUE),
+    {
+      session$setInputs(save_local_btn = 1)
+      written <- saved_rv()
+      expect_equal(length(written), 3L)
+      expect_true(all(file.exists(written)))
+      expect_true(all(startsWith(basename(written), "field2026_")))
+      expect_equal(nrow(footprints_r()$polygons), 1L)
+    }
+  )
 })

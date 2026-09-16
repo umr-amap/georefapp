@@ -4,11 +4,17 @@
 \alias{module-export}
 \alias{export_ui}
 \alias{export_server}
-\title{Export module: Darwin Core output and the audit trail}
+\title{Export module: getting the results out of a project}
 \usage{
 export_ui(id)
 
-export_server(id, con_r, refresh_r)
+export_server(
+  id,
+  con_r,
+  refresh_r,
+  project_r = shiny::reactive(NULL),
+  local_files = FALSE
+)
 }
 \arguments{
 \item{id}{Module id.}
@@ -17,13 +23,19 @@ export_server(id, con_r, refresh_r)
 
 \item{refresh_r}{A [shiny::reactive()] that changes whenever a decision is
 written.}
+
+\item{project_r}{A [shiny::reactive()] returning the project file path, used
+to name the exported files and to locate the project folder.}
+
+\item{local_files}{Offer to write the files next to the project file.}
 }
 \value{
 * UI: HTML tags for the export page.
  * Server: nothing, called for its side effects.
 }
 \description{
-Two downloads. The Darwin Core table is what goes into a database or a
+Three files. The Darwin Core table is what goes into a database or a
 publication; the decision log is what makes that table defensible, and the
-two are meant to travel together.
+two are meant to travel together; the footprints are the same decisions as
+GIS layers. All three are regenerated from the project file on demand.
 }

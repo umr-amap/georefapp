@@ -8,6 +8,9 @@
 #' @param id Module id.
 #' @param con_r A [shiny::reactive()] returning the open project connection, or
 #'   `NULL` when no project is open.
+#' @param on_export Function called, with no arguments, when the user asks to
+#'   go to their results. The workbench does not know the page layout around
+#'   it, so moving there is the caller's job.
 #'
 #' @return
 #'  * UI: HTML tags for the workbench page.
@@ -118,7 +121,7 @@ workbench_ui <- function(id) {
 #' @rdname module-workbench
 #'
 #' @export
-workbench_server <- function(id, con_r) {
+workbench_server <- function(id, con_r, on_export = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -155,15 +158,54 @@ workbench_server <- function(id, con_r) {
       shiny::req(con)
       refresh_rv()
       p <- project_progress(con)
-      shiny::tagList(
+      shiny::tags$div(
+        class = "d-flex flex-wrap align-items-baseline gap-2",
         shiny::tags$span(sprintf("%d of %d localities", p$done + p$unresolvable, p$localities)),
         shiny::tags$span(
-          class = "text-muted small ms-2",
+          class = "text-muted small",
           sprintf("%s of %s records", format(p$records_done, big.mark = " "),
                   format(p$records, big.mark = " "))
-        )
+        ),
+        # Always there, not only at the end: a partial export is legitimate,
+        # and the way out should not have to be discovered.
+        shiny::actionLink(ns("go_export_header"), "Export results →",
+                          class = "small ms-auto")
       )
     })
+
+    go_export <- function() {
+      shiny::removeModal()
+      if (is.function(on_export)) on_export()
+    }
+    shiny::observeEvent(input$go_export_header, go_export())
+    shiny::observeEvent(input$go_export_modal, go_export())
+
+    # Deciding the last pending locality is the moment the user is done, and
+    # otherwise nothing marks it: the list simply stops advancing.
+    finished_rv <- shiny::reactiveVal(FALSE)
+    announce_if_finished <- function(was_pending) {
+      if (!was_pending) return(invisible(NULL))
+      p <- project_progress(con_r())
+      if (p$pending > 0) return(invisible(NULL))
+      finished_rv(TRUE)
+      shiny::showModal(shiny::modalDialog(
+        title = "All localities decided",
+        shiny::tags$p(sprintf(
+          "%s of %s records now carry a georeference%s.",
+          format(p$records_done, big.mark = " "), format(p$records, big.mark = " "),
+          if (p$unresolvable > 0) sprintf("; %d localities were marked unresolvable", p$unresolvable) else ""
+        )),
+        shiny::tags$p(
+          "Every decision is already saved in the project file. The Export page",
+          "turns it into a Darwin Core table, the decision log and a GIS file of",
+          "the footprints."
+        ),
+        footer = shiny::tagList(
+          shiny::modalButton("Stay here"),
+          shiny::actionButton(ns("go_export_modal"), "Go to Export", class = "btn-primary")
+        )
+      ))
+    }
 
     output$localities <- reactable::renderReactable({
       loc <- localities_r()
@@ -535,6 +577,9 @@ workbench_server <- function(id, con_r) {
       shiny::updateTextAreaInput(session, "remarks", value = "")
       refresh_rv(refresh_rv() + 1)
       advance_to_next_pending()
+      # Only when this save decided a pending locality: revising a finished
+      # project should not announce the end again on every save.
+      announce_if_finished(identical(cur$status, "pending"))
     }
 
     advance_to_next_pending <- function() {

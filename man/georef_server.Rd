@@ -4,7 +4,7 @@
 \alias{georef_server}
 \title{Server for the georeferencing application}
 \usage{
-georef_server(stop_on_close = FALSE)
+georef_server(stop_on_close = FALSE, local_files = FALSE)
 }
 \arguments{
 \item{stop_on_close}{Stop the application, returning control to the R
@@ -12,6 +12,10 @@ console, once the last browser window closes. Defaults to `FALSE`: on a
 server, one user closing a tab must not take the application down for
 everyone. [launch()] turns it on, because there the browser is the only
 client and leaving R blocked on a dead app helps nobody.}
+
+\item{local_files}{Offer to write exports next to the project file, rather
+than only as browser downloads. Defaults to `FALSE`: on a server the
+project folder is the server's, not the user's. [launch()] turns it on.}
 }
 \value{
 A Shiny server function.

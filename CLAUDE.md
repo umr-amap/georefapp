@@ -88,11 +88,30 @@ ellipsoidal reference, not the s2 default.
   nothing reconnected. It defaults to `FALSE` and `launch()` passes `TRUE`:
   `app.R` deploys the same server to shinyapps.io, where one user closing a tab
   must not take the app down for everyone.
+- **An imported area replaces drawn shapes, never joins them.** The protocol
+  names one source for the footprint. The feature pick is held server-side
+  (`area_pick_rv`) because clearing a selectize is a browser round trip, and
+  until it returns the previous locality's area would still be savable.
 - **reactable selection** is read with `getReactableState("localities",
   "selected")` using the *bare* id inside a module — it reads `session$input`,
   which is already unnamespaced.
 - `store_localities()` sorts by `n_records` only, never by status. Status must
   not reorder rows, or the row a user just selected would move under them.
+
+### An area is a decision type, not a separate feature
+
+`decision_type = "area"` means the footprint *is* the locality (a park, a plot
+network), not an envelope around an uncertain place. Same columns, same
+point-radius derivation, so output stays GeoPick-compatible; only the protocol
+sentence and `georefappDecisionType` differ. `store_add_decision()` refuses an
+area whose footprint has no area. The existing drawn protocol text is kept word
+for word, because earlier decisions carry it.
+
+`R/area.R` reads GIS files. Two traps: `st_make_valid()` on lon/lat goes through
+s2 and returns a bowtie **unchanged**, so repair happens in the AEQD projection;
+and a GeoPackage without a CRS reads as an `ENGCRS`, not `NA`. Simplification
+is opt-in (tolerance 0 by default) and recorded in the protocol, since
+`footprintWKT` is repeated on every inheriting record.
 
 ### Candidates are matched on token rarity, not string similarity
 

@@ -254,3 +254,71 @@ test_that("each server instance counts its own sessions", {
   expect_false(identical(environment(a), environment(b)))
   expect_equal(get("open_sessions", envir = environment(a)), 0L)
 })
+
+area_upload <- function(env = parent.frame()) {
+  sq <- function(x0, y0) {
+    sf::st_polygon(list(cbind(c(x0, x0 + 0.4, x0 + 0.4, x0, x0), c(y0, y0, y0 + 0.4, y0 + 0.4, y0))))
+  }
+  src <- file.path(withr::local_tempdir(.local_envir = env), "parks.geojson")
+  sf::st_write(sf::st_sf(NAME = c("Odzala", "Lope"),
+                         geometry = sf::st_sfc(sq(14.6, 0.4), sq(11.4, -0.4), crs = 4326)),
+               src, quiet = TRUE)
+  # fileInput stores the upload under a generated name.
+  stored <- file.path(withr::local_tempdir(.local_envir = env), "0.geojson")
+  file.copy(src, stored)
+  data.frame(name = "parks.geojson", size = file.size(stored), type = "",
+             datapath = stored, stringsAsFactors = FALSE)
+}
+
+test_that("an imported feature is saved as an area that names its source", {
+  con <- local_con(c("PN Odzala", "Parc National d'Odzala", "Kribi"), c("a", "b", "c"))
+
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+    session$setInputs(localities__reactable__selected = 1L, radius_m = 1000)
+    session$setInputs(area_file = area_upload())
+    expect_equal(nrow(area_data_r()), 2L)
+
+    session$setInputs(area_label = "NAME", area_features = "1", area_tolerance = 0,
+                      is_area = TRUE)
+    m <- metrics_r()
+    expect_gt(m$footprint_area_m2, 1e9)
+
+    session$setInputs(save = 1)
+    dec <- store_current_decisions(con)
+    expect_equal(dec$decision_type, "area")
+    expect_match(dec$georeference_protocol,
+                 "imported from parks.geojson, NAME = 'Odzala'", fixed = TRUE)
+    expect_equal(dec$footprint_wkt, m$footprint_wkt)
+    # Saving clears the pick, so the next locality does not inherit it.
+    expect_null(imported_r())
+  })
+})
+
+test_that("an imported area takes precedence over shapes drawn alongside it", {
+  con <- local_con("PN Odzala")
+
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+    session$setInputs(localities__reactable__selected = 1L, radius_m = 1000)
+    session$setInputs(map_draw_new_feature = drawn_circle(1, 24.4667, 0.8167, 5000))
+    drawn <- metrics_r()$decimal_longitude
+    session$setInputs(area_file = area_upload(), area_label = "NAME",
+                      area_features = "1", area_tolerance = 0)
+    expect_false(isTRUE(all.equal(metrics_r()$decimal_longitude, drawn)))
+    expect_equal(metrics_r()$decimal_longitude, 14.8, tolerance = 1e-3)
+  })
+})
+
+test_that("a line cannot be saved as an area", {
+  con <- local_con("Route de Ouesso")
+
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+    session$setInputs(localities__reactable__selected = 1L, radius_m = 1000, is_area = TRUE)
+    session$setInputs(map_draw_new_feature = list(
+      type = "Feature", properties = list(edit_id = 1),
+      geometry = list(type = "LineString", coordinates = list(c(16, 1.6), c(16.3, 1.9)))
+    ))
+    expect_false(is.null(metrics_r()))
+    session$setInputs(save = 1)
+    expect_equal(nrow(store_decisions(con)), 0L)
+  })
+})

@@ -20,7 +20,8 @@ this is how a marker becomes a usable georeference.}
 \value{
 A list with elements `decimal_latitude`, `decimal_longitude`,
   `coordinate_uncertainty_m`, `coordinate_precision`,
-  `point_radius_spatial_fit`, `footprint_wkt`, `footprint_srs`,
+  `point_radius_spatial_fit`, `footprint_area_m2`, `footprint_wkt`,
+  `footprint_srs`,
   `geodetic_datum` and `centre_rule`. Returns `NULL` for empty input.
 }
 \description{

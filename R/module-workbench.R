@@ -59,6 +59,39 @@ workbench_ui <- function(id) {
               "Force the coordinate onto the footprint",
               value = FALSE
             ),
+            shiny::checkboxInput(
+              ns("is_area"),
+              "The shape is the locality itself (an area)",
+              value = FALSE
+            ),
+            bslib::accordion(
+              open = FALSE,
+              class = "mb-2",
+              bslib::accordion_panel(
+                "Import an area from a file",
+                value = "area_import",
+                shiny::fileInput(
+                  ns("area_file"), NULL, multiple = TRUE, width = "100%",
+                  accept = area_file_extensions,
+                  placeholder = "GeoJSON, KML, GPKG, shapefile"
+                ),
+                shiny::conditionalPanel(
+                  condition = "output.area_loaded === true",
+                  ns = ns,
+                  shiny::selectInput(ns("area_layer"), "Layer", choices = NULL, width = "100%"),
+                  shiny::selectInput(ns("area_label"), "Name features by", choices = NULL, width = "100%"),
+                  shiny::selectizeInput(
+                    ns("area_features"), "Features making up this locality",
+                    choices = NULL, multiple = TRUE, width = "100%",
+                    options = list(placeholder = "Type to search")
+                  ),
+                  shiny::numericInput(
+                    ns("area_tolerance"), "Simplify boundary to (m, 0 = keep as is)",
+                    value = 0, min = 0, step = 10, width = "100%"
+                  )
+                )
+              )
+            ),
             shiny::tags$hr(),
             shiny::tags$h6("Provenance"),
             shiny::textInput(ns("by"), "Georeferenced by", width = "100%"),
@@ -184,10 +217,140 @@ workbench_server <- function(id, con_r) {
       )
     })
 
-    # Moving to another locality clears whatever was drawn for the previous one.
+    # Moving to another locality clears whatever was drawn or picked for the
+    # previous one. The area file itself stays loaded: one file of parks or plot
+    # networks usually serves many localities in a row.
     shiny::observeEvent(current_r()$locality_key, {
       features_rv$x <- NULL
+      clear_area_pick()
+      cur <- shiny::isolate(current_r())
+      shiny::updateCheckboxInput(
+        session, "is_area",
+        value = !is.null(cur) && identical(cur$decision_type, "area")
+      )
     }, ignoreNULL = FALSE)
+
+    # -- Area import ----------------------------------------------------------
+
+    notify_error <- function(e) {
+      shiny::showNotification(conditionMessage(e), type = "error", duration = 8)
+      NULL
+    }
+
+    area_upload_r <- shiny::reactive({
+      f <- input$area_file
+      shiny::req(f)
+      tryCatch({
+        path <- area_resolve_upload(f$datapath, f$name)
+        layers <- area_layers(path)
+        if (length(layers) == 0) stop("The file holds no polygon layer.", call. = FALSE)
+        # Name the file as the user knows it: an archive by its own name, with
+        # the member that was read.
+        name <- if (nrow(f) == 1 && !identical(f$name, basename(path))) {
+          paste0(f$name, "/", basename(path))
+        } else {
+          basename(path)
+        }
+        list(path = path, name = name, layers = layers)
+      }, error = notify_error)
+    })
+
+    shiny::observeEvent(area_upload_r(), {
+      u <- area_upload_r()
+      shiny::updateSelectInput(session, "area_layer", choices = u$layers, selected = u$layers[1])
+    })
+
+    area_data_r <- shiny::reactive({
+      u <- area_upload_r()
+      shiny::req(u)
+      layer <- if (isTRUE(input$area_layer %in% u$layers)) input$area_layer else u$layers[1]
+      tryCatch(area_read(u$path, layer), error = notify_error)
+    })
+
+    output$area_loaded <- shiny::reactive(!is.null(area_upload_r()))
+    shiny::outputOptions(output, "area_loaded", suspendWhenHidden = FALSE)
+
+    shiny::observeEvent(area_data_r(), {
+      x <- area_data_r()
+      cols <- setdiff(names(x), attr(x, "sf_column"))
+      shiny::updateSelectInput(
+        session, "area_label",
+        choices = c("(feature number)" = "", cols),
+        selected = area_label_column(x) %||% ""
+      )
+    })
+
+    # Server-side selectize: a boundary file can hold thousands of features,
+    # more than is sensible to send to the browser as a static list.
+    shiny::observe({
+      x <- area_data_r()
+      shiny::req(x)
+      col <- input$area_label
+      fallback <- paste("Feature", seq_len(nrow(x)))
+      labels <- if (isTRUE(col %in% names(x))) as.character(x[[col]]) else fallback
+      blank <- is.na(labels) | !nzchar(trimws(labels))
+      labels[blank] <- fallback[blank]
+      shiny::updateSelectizeInput(
+        session, "area_features",
+        choices = stats::setNames(as.character(seq_len(nrow(x))), labels),
+        server = TRUE
+      )
+    })
+
+    # The pick is held on the server, not read straight from the input. Clearing
+    # a selectize is a round trip through the browser, and until it comes back
+    # the previous locality's area would still be live -- one quick second save
+    # would record it again under the wrong locality.
+    area_pick_rv <- shiny::reactiveVal(character(0))
+    shiny::observeEvent(input$area_features, {
+      area_pick_rv(input$area_features %||% character(0))
+    }, ignoreNULL = FALSE)
+    clear_area_pick <- function() {
+      area_pick_rv(character(0))
+      shiny::updateSelectizeInput(session, "area_features", selected = character(0))
+    }
+
+    imported_r <- shiny::reactive({
+      ids <- suppressWarnings(as.integer(area_pick_rv()))
+      if (length(ids) == 0) return(NULL)
+      x <- area_data_r()
+      u <- area_upload_r()
+      if (is.null(x) || is.null(u)) return(NULL)
+      ids <- ids[!is.na(ids) & ids <= nrow(x)]
+      if (length(ids) == 0) return(NULL)
+      tryCatch({
+        p <- area_prepare(x[ids, ], input$area_tolerance)
+        col <- input$area_label
+        named <- isTRUE(col %in% names(x))
+        attr(p, "origin") <- area_origin(
+          u$name, attr(x, "layer"),
+          label_column = if (named) col,
+          labels = if (named) as.character(x[[col]][ids]),
+          prepared = p
+        )
+        p
+      }, error = notify_error)
+    })
+
+    # Picking features from an area file is itself the statement that the
+    # locality is an area, so the box is ticked for the user. It can still be
+    # unticked, for a boundary used only as an envelope.
+    shiny::observeEvent(input$area_features, {
+      shiny::updateCheckboxInput(session, "is_area", value = TRUE)
+      imp <- imported_r()
+      if (is.null(imp)) return()
+      bb <- sf::st_bbox(imp)
+      leaflet::flyToBounds(
+        leaflet::leafletProxy("map", session),
+        bb[["xmin"]], bb[["ymin"]], bb[["xmax"]], bb[["ymax"]]
+      )
+    })
+
+    shiny::observeEvent(imported_r(), {
+      proxy <- leaflet::leafletProxy("map", session)
+      leaflet::clearGroup(proxy, "imported")
+      add_imported_area(proxy, imported_r())
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     shiny::observeEvent(input$map_center, {
       view_rv$lng <- input$map_center$lng
@@ -216,8 +379,11 @@ workbench_server <- function(id, con_r) {
             drawOptions = leafpm::pmDrawOptions(snappable = FALSE, allowSelfIntersection = FALSE)
           )
         if (!is.null(cur) && !is.na(cur$decision_id) && !is.na(cur$decimal_latitude)) {
-          map <- add_existing_decision(map, cur)
+          map <- add_existing_decision(
+            map, cur, store_decision_footprint(con_r(), cur$decision_id)
+          )
         }
+        map <- add_imported_area(map, imported_r())
         # Isolated: the checkbox is served by the proxy observer, so reading it
         # reactively here would rebuild the map on every toggle.
         if (isTRUE(input$show_candidates)) map <- add_candidates(map, candidates_r())
@@ -238,10 +404,16 @@ workbench_server <- function(id, con_r) {
       features_rv$x[[paste0("f", f$properties$edit_id)]] <- NULL
     })
 
+    # An imported area and drawn shapes are not combined: the protocol has to
+    # name one source for the footprint, and a boundary file with a hand-drawn
+    # addition would make that sentence untrue. The imported area wins.
     metrics_r <- shiny::reactive({
-      feats <- features_rv$x
-      if (is.null(feats) || length(feats) == 0) return(NULL)
-      g <- draw_features_to_sfc(unname(feats))
+      g <- imported_r()
+      if (is.null(g)) {
+        feats <- features_rv$x
+        if (is.null(feats) || length(feats) == 0) return(NULL)
+        g <- draw_features_to_sfc(unname(feats))
+      }
       if (is.null(g)) return(NULL)
       radius <- if (isTRUE(input$radius_m >= 0)) input$radius_m else 0
       tryCatch(
@@ -259,9 +431,12 @@ workbench_server <- function(id, con_r) {
       if (is.null(m)) {
         return(shiny::tags$span(
           class = "text-muted small",
-          "Draw a point, circle, line or polygon on the map."
+          "Draw a point, circle, line or polygon on the map, or import an area."
         ))
       }
+      has_area <- !is.na(m$point_radius_spatial_fit) && m$footprint_area_m2 > 0
+      wkt_kb <- nchar(m$footprint_wkt) / 1024
+      n_rec <- current_r()$n_records %||% 1L
       shiny::tagList(
         shiny::tags$div(
           class = "d-flex flex-wrap gap-3 small",
@@ -272,8 +447,32 @@ workbench_server <- function(id, con_r) {
             "Spatial fit",
             if (is.na(m$point_radius_spatial_fit)) "undefined" else sprintf("%.3f", m$point_radius_spatial_fit)
           ),
+          if (has_area) metric_item("Area", format_area(m$footprint_area_m2)),
           metric_item("Centre rule", m$centre_rule)
         ),
+        if (!is.null(imported_r()) && length(features_rv$x) > 0) {
+          shiny::tags$div(
+            class = "text-muted small mt-2",
+            "Using the imported area; shapes drawn on the map are ignored."
+          )
+        },
+        if (isTRUE(input$is_area) && !has_area) {
+          shiny::tags$div(
+            class = "text-danger small mt-2",
+            "An area needs a footprint with an area: a line or a bare point cannot be one."
+          )
+        },
+        # Worth saying because it is invisible until export: footprintWKT is
+        # repeated on every record that inherits the decision.
+        if (wkt_kb > 50) {
+          shiny::tags$div(
+            class = "text-warning small mt-2",
+            sprintf(
+              "The footprint is %s kB of text, written on each of %d record%s. Consider simplifying the boundary.",
+              format(round(wkt_kb), big.mark = " "), n_rec, if (n_rec > 1) "s" else ""
+            )
+          )
+        },
         if (m$coordinate_uncertainty_m == 0) {
           shiny::tags$div(
             class = "text-danger small mt-2",
@@ -314,7 +513,7 @@ workbench_server <- function(id, con_r) {
                      zoom = 11)
     })
 
-    write_decision <- function(type, metrics) {
+    write_decision <- function(type, metrics, footprint_origin = NA_character_) {
       con <- con_r()
       cur <- current_r()
       if (is.null(con) || is.null(cur)) return(invisible(NULL))
@@ -328,9 +527,11 @@ workbench_server <- function(id, con_r) {
         georeference_sources = input$sources,
         georeference_remarks = input$remarks,
         supersedes = cur$decision_id,
-        gazetteer_snapshot = candidates_snapshot()
+        gazetteer_snapshot = candidates_snapshot(),
+        footprint_origin = footprint_origin
       )
       features_rv$x <- NULL
+      clear_area_pick()
       shiny::updateTextAreaInput(session, "remarks", value = "")
       refresh_rv(refresh_rv() + 1)
       advance_to_next_pending()
@@ -361,7 +562,19 @@ workbench_server <- function(id, con_r) {
         )
         return()
       }
-      write_decision("drawn", m)
+      is_area <- isTRUE(input$is_area)
+      if (is_area && is.na(m$point_radius_spatial_fit)) {
+        shiny::showNotification(
+          "An area needs a footprint with an area. Draw a polygon or circle, or untick the area box.",
+          type = "error"
+        )
+        return()
+      }
+      imp <- imported_r()
+      write_decision(
+        if (is_area) "area" else "drawn", m,
+        footprint_origin = if (is.null(imp)) NA_character_ else attr(imp, "origin")
+      )
     })
 
     shiny::observeEvent(input$unresolvable, {
@@ -545,14 +758,31 @@ truncate_text <- function(x, n = 70L) {
 #' Draw an already-recorded decision on the map
 #'
 #' Shows the saved footprint and its uncertainty circle, so that a revision
-#' starts from a visible account of what was decided before.
+#' starts from a visible account of what was decided before. For an area the
+#' footprint is the decision, so it is drawn, not only its enclosing circle.
 #'
 #' @param map A leaflet map.
 #' @param cur One row of [store_localities()].
+#' @param footprint The decision's footprint, from [store_decision_footprint()],
+#'   or `NULL`.
 #'
 #' @return The map, with the footprint added.
 #' @noRd
-add_existing_decision <- function(map, cur) {
+add_existing_decision <- function(map, cur, footprint = NULL) {
+  if (!is.null(footprint)) {
+    type <- as.character(sf::st_geometry_type(footprint))
+    if (type %in% c("POLYGON", "MULTIPOLYGON")) {
+      map <- leaflet::addPolygons(
+        map, data = footprint, color = "#198754", weight = 2, dashArray = "4",
+        fillOpacity = 0.12, label = "Current footprint", group = "existing"
+      )
+    } else if (type %in% c("LINESTRING", "MULTILINESTRING")) {
+      map <- leaflet::addPolylines(
+        map, data = footprint, color = "#198754", weight = 3,
+        label = "Current footprint", group = "existing"
+      )
+    }
+  }
   map <- leaflet::addCircles(
     map,
     lng = cur$decimal_longitude, lat = cur$decimal_latitude,
@@ -566,4 +796,38 @@ add_existing_decision <- function(map, cur) {
     radius = 4, color = "#198754", fillOpacity = 1,
     label = "Current georeference", group = "existing"
   )
+}
+
+#' Add an imported area to a map or a map proxy
+#'
+#' Drawn in blue, apart from the green of a saved decision, and not editable:
+#' leafpm slows to a crawl on boundaries of a few thousand vertices, and a
+#' boundary taken from a file should be changed by choosing a different file or
+#' tolerance, which the protocol can record, rather than by hand.
+#'
+#' @param map A leaflet map or proxy.
+#' @param area Result of [area_prepare()], or `NULL`.
+#'
+#' @return The map.
+#' @noRd
+add_imported_area <- function(map, area) {
+  if (is.null(area)) return(map)
+  leaflet::addPolygons(
+    map, data = area, color = "#0d6efd", weight = 2, fillOpacity = 0.15,
+    label = "Imported area", group = "imported"
+  )
+}
+
+#' Format an area for display
+#'
+#' @param m2 Area in square metres.
+#'
+#' @return A string in hectares below 1 km², in km² above.
+#' @noRd
+format_area <- function(m2) {
+  if (m2 < 1e6) {
+    sprintf("%s ha", format(signif(m2 / 1e4, 3), big.mark = " "))
+  } else {
+    sprintf("%s km²", format(round(m2 / 1e6, if (m2 < 1e8) 1 else 0), big.mark = " ", nsmall = 0))
+  }
 }

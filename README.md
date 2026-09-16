@@ -15,7 +15,9 @@ the result.
    `Env. Yangambi` and `yangambi` become one unit of work.
 2. **Georeference** by drawing a point, circle, line, rectangle or polygon on
    the map. The coordinate and its uncertainty are derived from the minimum
-   bounding circle of what you drew, using the point-radius method.
+   bounding circle of what you drew, using the point-radius method. A locality
+   that is itself an area — a park, a plot network — can instead be imported
+   from a GIS file and recorded as that area; see [Areas](#areas).
 3. **Export** a Darwin Core table, plus the decision log that backs it.
 
 ## Installation
@@ -91,6 +93,29 @@ than an approximation. Two centre rules are available:
 `pointRadiusSpatialFit` follows the Darwin Core definition: the ratio of the
 circle's area to the footprint's, `NA` where the footprint has no area (a line,
 or an unbuffered point).
+
+## Areas
+
+Some localities are not a place somewhere inside a shape but the shape itself:
+`Parc National d'Odzala`, a plot network, a concession. Tick **The shape is the
+locality itself** and the decision is recorded with
+`georefappDecisionType = "area"`. `footprintWKT` then holds the extent of the
+locality, not an envelope around an uncertain position. The point and radius
+are still derived from it, so the output stays GeoPick-compatible.
+
+Boundaries rarely need drawing by hand. Under **Import an area from a file**,
+load a GeoJSON, KML/KMZ, GeoPackage or shapefile (zipped, or all its parts at
+once) and pick the feature or features that make up the locality. The file
+stays loaded as you move between localities, so one file of parks serves them
+all. Invalid boundaries are repaired, and the protocol names the file, layer
+and features the footprint came from.
+
+`footprintWKT` is repeated on every record that inherits a decision, and an
+official boundary can run to a megabyte of text. The app warns when a footprint
+is large; **Simplify boundary to** removes vertices within a tolerance in
+metres, and the tolerance is written into the protocol.
+
+An area needs a footprint with an area: a line or a bare point is refused.
 
 ## The locality dictionary
 

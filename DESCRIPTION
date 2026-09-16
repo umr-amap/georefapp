@@ -12,7 +12,9 @@ Description: Shiny application for georeferencing lists of plain-text localities
     georeferenced once and every record sharing it inherits the result. A
     georeference is made by drawing a point, circle, line or polygon on a map;
     the coordinate and its uncertainty are derived from the minimum bounding
-    circle of the drawn footprint, following the point-radius method. Every
+    circle of the drawn footprint, following the point-radius method. A
+    locality that is itself an area, such as a park, can be imported from a
+    GIS file and recorded as that area. Every
     decision is written to an append-only log held in a local project file, so
     that the Darwin Core output can be regenerated, audited and revised without
     ever losing an earlier interpretation.

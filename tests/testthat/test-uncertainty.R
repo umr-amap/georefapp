@@ -94,3 +94,26 @@ test_that("several drawn shapes are enclosed by one circle", {
 test_that("empty input yields nothing", {
   expect_null(georef_metrics(NULL))
 })
+
+test_that("the footprint area is reported, and is zero for a line", {
+  poly <- sf::st_sfc(
+    sf::st_polygon(list(cbind(c(24, 24.2, 24.2, 24, 24), c(0.5, 0.5, 0.7, 0.7, 0.5)))),
+    crs = 4326
+  )
+  withr::local_options(list(sf_use_s2 = NULL))
+  old <- sf::sf_use_s2()
+  suppressMessages(sf::sf_use_s2(FALSE))
+  withr::defer(suppressMessages(sf::sf_use_s2(old)))
+  # Ellipsoidal reference; the projected figure should agree to well under 0.1%.
+  ref <- as.numeric(sf::st_area(poly))
+  expect_equal(georef_metrics(poly)$footprint_area_m2, ref, tolerance = 1e-3)
+
+  ln <- sf::st_sfc(sf::st_linestring(cbind(c(24, 24.3), c(0.5, 0.6))), crs = 4326)
+  expect_equal(georef_metrics(ln)$footprint_area_m2, 0)
+})
+
+test_that("areas are shown in hectares when small and km² when large", {
+  expect_equal(format_area(52300), "5.23 ha")
+  expect_equal(format_area(6.7e9), "6 700 km²")
+  expect_equal(format_area(3.45e6), "3.5 km²")
+})

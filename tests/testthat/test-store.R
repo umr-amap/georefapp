@@ -121,3 +121,60 @@ test_that("re-importing keeps decisions for localities that survive", {
   expect_equal(loc$status[loc$locality_key == "yangambi"], "done")
   expect_equal(loc$status[loc$locality_key == "ipassa"], "pending")
 })
+
+test_that("an area decision says the footprint is the locality itself", {
+  con <- local_project()
+  park <- sf::st_sfc(sf::st_polygon(list(cbind(
+    c(14.6, 15.0, 15.0, 14.6, 14.6), c(0.4, 0.4, 0.8, 0.8, 0.4)
+  ))), crs = 4326)
+  m <- georef_metrics(park)
+  id <- store_add_decision(con, "kribi", "area", m,
+                           footprint_origin = "imported from parks.gpkg, NAME = 'Odzala'")
+
+  dec <- store_current_decisions(con)
+  expect_equal(dec$decision_type, "area")
+  expect_true(startsWith(
+    dec$georeference_protocol,
+    "Footprint is the extent of the locality itself, not an uncertainty envelope (imported from parks.gpkg, NAME = 'Odzala')"
+  ))
+
+  # The shape is the decision, so it must come back out exactly as it went in.
+  fp <- store_decision_footprint(con, id)
+  expect_equal(sf::st_as_text(fp), m$footprint_wkt)
+  dwc <- dwc_table(con)
+  kribi <- dwc[dwc$georefappDecisionType %in% "area", ]
+  expect_equal(nrow(kribi), 2L)
+  expect_true(all(kribi$footprintWKT == m$footprint_wkt))
+  loc <- store_localities(con)
+  expect_equal(loc$status[loc$locality_key == "kribi"], "done")
+})
+
+test_that("an area needs a footprint with an area", {
+  con <- local_project()
+  ln <- sf::st_sfc(sf::st_linestring(cbind(c(24, 24.3), c(0.5, 0.6))), crs = 4326)
+  expect_error(store_add_decision(con, "yangambi", "area", georef_metrics(ln)),
+               "footprint with an area")
+  expect_error(store_add_decision(con, "yangambi", "area", NULL),
+               "footprint with an area")
+  expect_equal(nrow(store_decisions(con)), 0L)
+})
+
+test_that("the drawn protocol is unchanged, and an imported envelope names its file", {
+  con <- local_project()
+  pt <- sf::st_sfc(sf::st_point(c(24.5, 0.77)), crs = 4326)
+  m <- georef_metrics(pt, point_radius_m = 5000)
+  store_add_decision(con, "yangambi", "drawn", m)
+  store_add_decision(con, "irangi", "drawn", m, footprint_origin = "imported from x.kml")
+  dec <- store_current_decisions(con)
+  expect_match(dec$georeference_protocol[dec$locality_key == "yangambi"],
+               "^Point-radius from drawn footprint; minimum bounding circle")
+  expect_match(dec$georeference_protocol[dec$locality_key == "irangi"],
+               "^Point-radius from footprint imported from x.kml; minimum bounding circle")
+})
+
+test_that("a decision without a footprint has none to show", {
+  con <- local_project()
+  id <- store_add_decision(con, "irangi", "unresolvable")
+  expect_null(store_decision_footprint(con, id))
+  expect_null(store_decision_footprint(con, NA_character_))
+})

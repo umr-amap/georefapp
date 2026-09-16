@@ -185,7 +185,10 @@ store_decisions <- function(con) {
 #'
 #' @param con Connection from [store_open()].
 #' @param locality_key Normalised key the decision applies to.
-#' @param decision_type One of `"drawn"`, `"adopted"` or `"unresolvable"`.
+#' @param decision_type One of `"drawn"`, `"area"`, `"adopted"` or
+#'   `"unresolvable"`. `"area"` states that the locality *is* the footprint --
+#'   a park, a plot network -- rather than a place somewhere inside it; it
+#'   requires a footprint with an area.
 #' @param metrics Result of [georef_metrics()], or `NULL` for an unresolvable
 #'   locality.
 #' @param verbatim_locality Representative verbatim string, so that the log
@@ -196,31 +199,52 @@ store_decisions <- function(con) {
 #' @param supersedes `decision_id` this one replaces, or `NA`.
 #' @param gazetteer_snapshot Identifier of the locality dictionary consulted, or
 #'   `NA` when none was available.
+#' @param footprint_origin Where the footprint came from when it was not drawn
+#'   on the map, e.g. the file it was imported from. Written into the protocol.
 #'
 #' @return The new `decision_id`, invisibly.
 #'
 #' @export
 store_add_decision <- function(con,
                                locality_key,
-                               decision_type = c("drawn", "adopted", "unresolvable"),
+                               decision_type = c("drawn", "area", "adopted", "unresolvable"),
                                metrics = NULL,
                                verbatim_locality = NA_character_,
                                georeferenced_by = NA_character_,
                                georeference_sources = NA_character_,
                                georeference_remarks = NA_character_,
                                supersedes = NA_character_,
-                               gazetteer_snapshot = NA_character_) {
+                               gazetteer_snapshot = NA_character_,
+                               footprint_origin = NA_character_) {
   decision_type <- match.arg(decision_type)
+  footprint_origin <- as_chr1(footprint_origin)
+  # An area claims the footprint is the locality's own extent. A line or a bare
+  # point has no extent to claim, and letting one through would put a shape in
+  # footprintWKT that says the opposite of what the decision type does.
+  if (decision_type == "area" &&
+      (is.null(metrics) || is.na(metrics$point_radius_spatial_fit))) {
+    stop("An area decision needs a footprint with an area.", call. = FALSE)
+  }
   id <- new_id()
   now <- iso_now()
 
   protocol <- if (is.null(metrics)) {
     NA_character_
   } else {
-    sprintf(
-      "Point-radius from drawn footprint; minimum bounding circle, centre rule '%s'; %s",
-      metrics$centre_rule, app_version()
-    )
+    source <- if (is.na(footprint_origin)) "drawn on the map" else footprint_origin
+    head <- if (decision_type == "area") {
+      sprintf(paste0("Footprint is the extent of the locality itself, not an ",
+                     "uncertainty envelope (%s); point-radius derived from it"),
+              source)
+    } else if (is.na(footprint_origin)) {
+      # Kept word for word: earlier decisions carry this text, and the two
+      # should read the same when they describe the same method.
+      "Point-radius from drawn footprint"
+    } else {
+      paste("Point-radius from footprint", footprint_origin)
+    }
+    sprintf("%s; minimum bounding circle, centre rule '%s'; %s",
+            head, metrics$centre_rule, app_version())
   }
 
   row <- data.frame(
@@ -331,4 +355,26 @@ store_localities <- function(con) {
   # jump around as they are decided, or the row a user just selected would move
   # under them.
   dplyr::arrange(loc, dplyr::desc(.data$n_records), .data$verbatim_locality)
+}
+
+#' The footprint recorded by one decision
+#'
+#' Fetched on demand rather than carried in [store_localities()]: an imported
+#' boundary can run to a megabyte, and the locality list is rebuilt after every
+#' save.
+#'
+#' @param con Connection from [store_open()].
+#' @param decision_id Decision to read.
+#'
+#' @return A length-one `sfc` in EPSG:4326, or `NULL` when the decision has no
+#'   footprint.
+#' @noRd
+store_decision_footprint <- function(con, decision_id) {
+  if (is.null(con) || is.na(as_chr1(decision_id))) return(NULL)
+  res <- DBI::dbGetQuery(
+    con, "SELECT footprint_wkt FROM decisions WHERE decision_id = ?",
+    params = list(decision_id)
+  )
+  if (nrow(res) == 0 || is.na(res$footprint_wkt[1])) return(NULL)
+  sf::st_as_sfc(res$footprint_wkt[1], crs = 4326)
 }

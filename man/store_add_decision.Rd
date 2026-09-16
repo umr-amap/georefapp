@@ -7,14 +7,15 @@
 store_add_decision(
   con,
   locality_key,
-  decision_type = c("drawn", "adopted", "unresolvable"),
+  decision_type = c("drawn", "area", "adopted", "unresolvable"),
   metrics = NULL,
   verbatim_locality = NA_character_,
   georeferenced_by = NA_character_,
   georeference_sources = NA_character_,
   georeference_remarks = NA_character_,
   supersedes = NA_character_,
-  gazetteer_snapshot = NA_character_
+  gazetteer_snapshot = NA_character_,
+  footprint_origin = NA_character_
 )
 }
 \arguments{
@@ -22,7 +23,10 @@ store_add_decision(
 
 \item{locality_key}{Normalised key the decision applies to.}
 
-\item{decision_type}{One of `"drawn"`, `"adopted"` or `"unresolvable"`.}
+\item{decision_type}{One of `"drawn"`, `"area"`, `"adopted"` or
+`"unresolvable"`. `"area"` states that the locality *is* the footprint --
+a park, a plot network -- rather than a place somewhere inside it; it
+requires a footprint with an area.}
 
 \item{metrics}{Result of [georef_metrics()], or `NULL` for an unresolvable
 locality.}
@@ -40,6 +44,9 @@ reads on its own.}
 
 \item{gazetteer_snapshot}{Identifier of the locality dictionary consulted, or
 `NA` when none was available.}
+
+\item{footprint_origin}{Where the footprint came from when it was not drawn
+on the map, e.g. the file it was imported from. Written into the protocol.}
 }
 \value{
 The new `decision_id`, invisibly.

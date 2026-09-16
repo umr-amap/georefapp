@@ -54,8 +54,23 @@ workbench_ui <- function(id) {
             shiny::tags$hr(),
             shiny::tags$h6("Interpretation"),
             shiny::numericInput(
-              ns("radius_m"), "Radius for a bare point (m)",
+              ns("radius_m"),
+              shiny::tagList(
+                "Radius for a bare point (m) ",
+                bslib::popover(
+                  shiny::tags$a(href = "#", class = "text-decoration-none",
+                                shiny::icon("circle-info"),
+                                `aria-label` = "What does this radius do?"),
+                  title = "Radius for a bare point",
+                  radius_help()
+                )
+              ),
               value = 1000, min = 0, step = 500, width = "100%"
+            ),
+            shiny::helpText(
+              class = "mt-n2",
+              "Only for markers. It becomes the uncertainty: how far from the",
+              "marker the place could be."
             ),
             shiny::checkboxInput(
               ns("centre_inside"),
@@ -458,7 +473,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       }
       if (is.null(g)) return(NULL)
       radius <- if (isTRUE(input$radius_m >= 0)) input$radius_m else 0
-      tryCatch(
+      m <- tryCatch(
         georef_metrics(
           g,
           point_radius_m = radius,
@@ -466,6 +481,13 @@ workbench_server <- function(id, con_r, on_export = NULL) {
         ),
         error = function(e) NULL
       )
+      if (is.null(m)) return(NULL)
+      # Whether the radius field shaped this result. It is easy to forget that
+      # a number typed for an earlier locality is still there, so the metrics
+      # say so whenever it is in play.
+      own <- attr(g, "radius") %||% rep(0, length(g))
+      m$point_radius_used <- if (any(is_point_geom(g) & own <= 0)) radius else NA_real_
+      m
     })
 
     output$metrics <- shiny::renderUI({
@@ -492,6 +514,15 @@ workbench_server <- function(id, con_r, on_export = NULL) {
           if (has_area) metric_item("Area", format_area(m$footprint_area_m2)),
           metric_item("Centre rule", m$centre_rule)
         ),
+        if (!is.na(m$point_radius_used) && m$point_radius_used > 0) {
+          shiny::tags$div(
+            class = "text-muted small mt-2",
+            sprintf(
+              "Includes the %s m radius set for markers, under Interpretation.",
+              format(m$point_radius_used, big.mark = " ")
+            )
+          )
+        },
         if (!is.null(imported_r()) && length(features_rv$x) > 0) {
           shiny::tags$div(
             class = "text-muted small mt-2",
@@ -875,4 +906,40 @@ format_area <- function(m2) {
   } else {
     sprintf("%s km²", format(round(m2 / 1e6, if (m2 < 1e8) 1 else 0), big.mark = " ", nsmall = 0))
   }
+}
+
+#' Explanation of the bare-point radius
+#'
+#' @return HTML tags for the popover body.
+#' @noRd
+radius_help <- function() {
+  htmltools::tagList(
+    htmltools::tags$p(
+      "A marker on its own says nothing about how big the place is. This radius",
+      "is drawn around each marker, and the result is treated like a circle you",
+      "had drawn yourself."
+    ),
+    htmltools::tags$p(
+      htmltools::tags$b("What it changes."),
+      "It becomes coordinateUncertaintyInMeters for every record sharing the",
+      "locality: the claim that the specimen was collected within that distance",
+      "of the coordinate. Too small overstates how precisely the place is known;",
+      "too large throws away precision you had."
+    ),
+    htmltools::tags$p(
+      htmltools::tags$b("What it does not touch."),
+      "Circles keep their own radius. Lines and polygons are used as drawn. A",
+      "marker drawn together with other shapes gets the radius before the",
+      "enclosing circle is computed. Saved georeferences are not changed; the",
+      "value applies to what you save next, and stays set for the next locality."
+    ),
+    htmltools::tags$p(
+      class = "mb-0",
+      htmltools::tags$b("Choosing it."),
+      "Cover the extent of the place the text names: from the marker to the",
+      "farthest edge of the village, camp or town. Add the imprecision of the",
+      "source: a coarse map, a guessed position. Zero is refused, since it claims",
+      "the spot is known exactly."
+    )
+  )
 }

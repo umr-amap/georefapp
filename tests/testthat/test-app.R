@@ -131,6 +131,32 @@ test_that("a zero radius is refused rather than silently recorded", {
   })
 })
 
+test_that("the metrics say when the marker radius is in play, and only then", {
+  con <- local_con("Yangambi")
+
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+    session$setInputs(localities__reactable__selected = 1L, radius_m = 2500)
+    session$setInputs(map_draw_new_feature = drawn_marker(1, 24.4667, 0.8167))
+    expect_equal(metrics_r()$point_radius_used, 2500)
+    expect_equal(metrics_r()$coordinate_uncertainty_m, 2500)
+    expect_match(as.character(output$metrics$html), "Includes the 2 500 m radius", fixed = TRUE)
+
+    # Replace the marker with a circle: its own radius wins and the field is
+    # no longer involved.
+    session$setInputs(map_draw_deleted_features = drawn_marker(1, 24.4667, 0.8167))
+    session$setInputs(map_draw_new_feature = drawn_circle(2, 24.4667, 0.8167, 800))
+    expect_true(is.na(metrics_r()$point_radius_used))
+    expect_equal(metrics_r()$coordinate_uncertainty_m, 800)
+    expect_false(grepl("Includes the", as.character(output$metrics$html), fixed = TRUE))
+  })
+})
+
+test_that("the radius field explains itself in the page", {
+  html <- as.character(htmltools::renderTags(workbench_ui("wb"))$html)
+  expect_match(html, "Only for markers", fixed = TRUE)
+  expect_match(html, "coordinateUncertaintyInMeters", fixed = TRUE)
+})
+
 test_that("marking a locality unresolvable is recorded as a decision", {
   con <- local_con("Kribi")
 

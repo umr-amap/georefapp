@@ -95,6 +95,29 @@ than an approximation. Two centre rules are available:
 circle's area to the footprint's, `NA` where the footprint has no area (a line,
 or an unbuffered point).
 
+### The radius for a bare point
+
+A marker on its own has no size, but a place does. **Radius for a bare point**
+(default 1000 m) is drawn around each marker, and the result is treated like a
+circle you drew yourself. Its consequences:
+
+- **It becomes the uncertainty.** For a marker alone,
+  `coordinateUncertaintyInMeters` is exactly this radius, and every record
+  sharing the locality inherits it: the claim that the specimen was collected
+  within that distance of the coordinate. Too small overstates how well the
+  place is known; too large throws away precision you had.
+- **It only affects markers.** Drawn circles keep their own radius; lines and
+  polygons are used as drawn. A marker drawn together with other shapes gets the
+  radius first, and the enclosing circle then covers everything.
+- **It applies to what you save next.** Saved georeferences keep the radius they
+  were saved with. The value stays set when you move to the next locality, so
+  check it; the metrics under the map say whenever it is in use.
+- **Zero is refused**, because it would claim the spot is known exactly.
+
+Choose it to reach from the marker to the farthest edge of the place the text
+names — the whole village, camp or town — and add the imprecision of the source,
+such as a coarse map or a guessed position.
+
 ## Areas
 
 Some localities are not a place somewhere inside a shape but the shape itself:

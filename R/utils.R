@@ -46,7 +46,23 @@ base_map <- function(...) {
       baseGroups = c("OSM", "Satellite", "Topographic"),
       options = leaflet::layersControlOptions(collapsed = TRUE)
     ) |>
-    leaflet::addScaleBar(position = "bottomleft") |>
+    # Locality descriptions are often distances along a river or road ("120 km
+    # upstream of Kisangani"). The ruler measures a clicked path, so it follows
+    # the bends; the scale bar sits beside it rather than at the far edge. Both
+    # live outside leafpm, so a measurement is never mistaken for a footprint.
+    leaflet::addScaleBar(
+      position = "topleft",
+      options = leaflet::scaleBarOptions(imperial = FALSE)
+    ) |>
+    leaflet::addMeasure(
+      position = "topleft",
+      primaryLengthUnit = "kilometers",
+      secondaryLengthUnit = "meters",
+      primaryAreaUnit = "hectares",
+      secondaryAreaUnit = "sqmeters",
+      activeColor = "#d62728",
+      completedColor = "#ff7f0e"
+    ) |>
     leaflet::setView(lng = 18, lat = 0, zoom = 4)
 }
 

@@ -7,15 +7,19 @@
 use_gazetteer(file, ...)
 }
 \arguments{
-\item{file}{Snapshot file written by [gazetteer_snapshot_build()], or
+\item{file}{Snapshot file(s) written by [gazetteer_snapshot_build()], or
 `NULL` to work without a dictionary.}
 
 \item{...}{Passed to [gazetteer_provider()].}
 }
 \value{
-The provider, invisibly, or `NULL`.
+The provider, invisibly, or `NULL`. Its open connection(s) are
+  attached as the `con` attribute.
 }
 \description{
 Sets the candidate provider and the snapshot identifier that every decision
-is stamped with.
+is stamped with. Several snapshots can be used at once -- RAINBIO and a
+dictionary built for one source, say -- in which case their candidates are
+listed one dictionary after the other (see [candidates_combine()]) and every
+decision is stamped with all of their identifiers.
 }

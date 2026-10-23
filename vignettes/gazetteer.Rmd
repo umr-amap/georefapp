@@ -59,6 +59,30 @@ Running with no gazetteer is fully supported, and is the normal state for most
 of Central Africa — the app shows "no similar locality found", which is what a
 real dictionary returns for a place it does not know.
 
+## Several dictionaries at once
+
+A source sometimes comes with its own list of places: the islands of a thesis,
+placed by their distance along a river, or the stations of an old survey. Build
+it as a snapshot from a data frame with the same columns, give it a `label`,
+and pass both files:
+
+```{r several, eval = FALSE}
+gazetteer_snapshot_build(islands, "mandango1982-iles.sqlite",
+                         snapshot_id = "mandango1982-iles-km-20261023",
+                         label = "mandango-km")
+launch(gazetteer = c("rainbio-gazetteer.sqlite", "mandango1982-iles.sqlite"))
+```
+
+Candidates are listed one dictionary after the other, never ranked together:
+coverage is measured against each dictionary's own vocabulary, so a full match
+among eighty islands and a full match in RAINBIO are not the same claim. On the
+map, RAINBIO candidates stay orange and the others are purple. Every decision
+records the identifiers of all the dictionaries that were on screen.
+
+Keep numbers out of the labels of such a dictionary unless they identify the
+place: every word is weighed, and a "30 km" in one label would match any
+locality "30 m from the point".
+
 ## Rebuild it when the source changes
 
 After new records are loaded, synonymy is curated, or the view definition is

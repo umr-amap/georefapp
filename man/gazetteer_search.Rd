@@ -9,7 +9,8 @@ gazetteer_search(
   text,
   limit = 20L,
   min_coverage = 0.34,
-  georeferenced_only = FALSE
+  georeferenced_only = FALSE,
+  source = "rainbio"
 )
 }
 \arguments{
@@ -23,6 +24,8 @@ gazetteer_search(
 fraction of the query's weight.}
 
 \item{georeferenced_only}{Return only candidates that can be drawn.}
+
+\item{source}{Label reported in the `source` column.}
 }
 \value{
 A tibble shaped like [candidates_empty()], best first. The tokens

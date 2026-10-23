@@ -127,13 +127,17 @@ georef_server <- function(stop_on_close = FALSE, local_files = FALSE) {
 #' Use a gazetteer snapshot for the rest of the session
 #'
 #' Sets the candidate provider and the snapshot identifier that every decision
-#' is stamped with.
+#' is stamped with. Several snapshots can be used at once -- RAINBIO and a
+#' dictionary built for one source, say -- in which case their candidates are
+#' listed one dictionary after the other (see [candidates_combine()]) and every
+#' decision is stamped with all of their identifiers.
 #'
-#' @param file Snapshot file written by [gazetteer_snapshot_build()], or
+#' @param file Snapshot file(s) written by [gazetteer_snapshot_build()], or
 #'   `NULL` to work without a dictionary.
 #' @param ... Passed to [gazetteer_provider()].
 #'
-#' @return The provider, invisibly, or `NULL`.
+#' @return The provider, invisibly, or `NULL`. Its open connection(s) are
+#'   attached as the `con` attribute.
 #'
 #' @export
 use_gazetteer <- function(file, ...) {
@@ -141,9 +145,20 @@ use_gazetteer <- function(file, ...) {
     options(georefapp.candidates = NULL, georefapp.candidates_snapshot = NULL)
     return(invisible(NULL))
   }
-  p <- gazetteer_provider(file, ...)
-  options(georefapp.candidates = p)
-  message("Gazetteer: ", gazetteer_info(attr(p, "con"))[["snapshot_id"]])
+  ps <- lapply(file, gazetteer_provider, ...)
+  ids <- vapply(ps, function(p) unname(gazetteer_info(attr(p, "con"))[["snapshot_id"]]),
+                character(1))
+  if (length(ps) == 1L) {
+    p <- ps[[1]]
+  } else {
+    p <- do.call(candidates_combine, ps)
+    attr(p, "con") <- lapply(ps, attr, "con")
+  }
+  # Set after building: each gazetteer_provider() call stamps its own id, and
+  # the decision must name every dictionary that was on screen.
+  id <- paste(ids, collapse = " + ")
+  options(georefapp.candidates = p, georefapp.candidates_snapshot = id)
+  message("Gazetteer: ", id)
   invisible(p)
 }
 
@@ -151,10 +166,10 @@ use_gazetteer <- function(file, ...) {
 #'
 #' @param port Port to serve on.
 #' @param launch.browser Whether to open a browser window.
-#' @param gazetteer Gazetteer snapshot file, or `NULL` to run without one.
-#'   The application is fully usable without a dictionary -- that is the normal
-#'   state for most of Central Africa -- so a missing file is reported and then
-#'   ignored rather than raised.
+#' @param gazetteer Gazetteer snapshot file, several of them, or `NULL` to run
+#'   without one. The application is fully usable without a dictionary -- that
+#'   is the normal state for most of Central Africa -- so a missing file is
+#'   reported and then ignored rather than raised.
 #' @param stop_on_close Return to the R console when the last browser window
 #'   closes, rather than leaving the console blocked until interrupted.
 #'   Reloading the page does not count as closing it. Set `FALSE` to keep the
@@ -167,6 +182,7 @@ use_gazetteer <- function(file, ...) {
 #' \dontrun{
 #' launch()
 #' launch(gazetteer = "rainbio-gazetteer.sqlite")
+#' launch(gazetteer = c("rainbio-gazetteer.sqlite", "mandango1982-iles.sqlite"))
 #' }
 #'
 #' @export
@@ -174,11 +190,11 @@ launch <- function(port = 5792, launch.browser = TRUE,
                    gazetteer = getOption("georefapp.gazetteer"),
                    stop_on_close = TRUE, ...) {
   if (!is.null(gazetteer)) {
-    if (file.exists(gazetteer)) {
-      p <- use_gazetteer(gazetteer)
+    found <- file.exists(gazetteer)
+    for (g in gazetteer[!found]) message("No gazetteer at ", g, " — running without it.")
+    if (any(found)) {
+      p <- use_gazetteer(gazetteer[found])
       on.exit(gazetteer_close(attr(p, "con")), add = TRUE)
-    } else {
-      message("No gazetteer at ", gazetteer, " — running without one.")
     }
   }
   app <- shiny::shinyApp(

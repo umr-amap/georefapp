@@ -17,10 +17,10 @@ launch(
 
 \item{launch.browser}{Whether to open a browser window.}
 
-\item{gazetteer}{Gazetteer snapshot file, or `NULL` to run without one.
-The application is fully usable without a dictionary -- that is the normal
-state for most of Central Africa -- so a missing file is reported and then
-ignored rather than raised.}
+\item{gazetteer}{Gazetteer snapshot file, several of them, or `NULL` to run
+without one. The application is fully usable without a dictionary -- that
+is the normal state for most of Central Africa -- so a missing file is
+reported and then ignored rather than raised.}
 
 \item{stop_on_close}{Return to the R console when the last browser window
 closes, rather than leaving the console blocked until interrupted.
@@ -39,6 +39,7 @@ Launch the georeferencing application
 \dontrun{
 launch()
 launch(gazetteer = "rainbio-gazetteer.sqlite")
+launch(gazetteer = c("rainbio-gazetteer.sqlite", "mandango1982-iles.sqlite"))
 }
 
 }

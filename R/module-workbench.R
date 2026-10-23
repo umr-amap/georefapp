@@ -748,6 +748,7 @@ candidate_panel <- function(cand, focus_input) {
       shiny::tags$span(class = "text-muted", name)
     }
     detail <- paste(c(
+      if (!is.na(r$source) && r$source != "rainbio") r$source,
       sprintf("%d record%s", r$n_records, if (r$n_records > 1) "s" else ""),
       if (geo && !is.na(r$n_distinct_coords))
         sprintf("%d coord%s", r$n_distinct_coords,
@@ -761,7 +762,7 @@ candidate_panel <- function(cand, focus_input) {
       shiny::tags$span(
         style = sprintf(
           "flex:0 0 8px;height:8px;margin-top:6px;border-radius:50%%;background:%s;",
-          if (geo) "#fd7e14" else "#dee2e6"
+          if (geo) candidate_colour(r$source) else "#dee2e6"
         )
       ),
       shiny::tags$div(
@@ -806,17 +807,33 @@ add_candidates <- function(map, cand) {
     map,
     lng = cand$decimal_longitude, lat = cand$decimal_latitude,
     radius = pmin(10, pmax(4, sqrt(cand$n_records) + 3)),
-    color = "#fd7e14", weight = 1, fillOpacity = 0.45,
+    color = candidate_colour(cand$source), weight = 1, fillOpacity = 0.45,
     group = "candidates",
     label = lapply(seq_len(nrow(cand)), function(i) {
       htmltools::HTML(sprintf(
-        "<b>%s</b><br>%d records, %s distinct coordinates",
+        "<b>%s</b><br>%s%d records, %s distinct coordinates",
         htmltools::htmlEscape(truncate_text(cand$locality_verbatim[i], 90)),
+        if (!is.na(cand$source[i]) && cand$source[i] != "rainbio")
+          paste0(htmltools::htmlEscape(cand$source[i]), " · ") else "",
         cand$n_records[i],
         if (is.na(cand$n_distinct_coords[i])) "?" else cand$n_distinct_coords[i]
       ))
     })
   )
+}
+
+#' Marker colour for a candidate's dictionary
+#'
+#' RAINBIO keeps the orange it always had; any other dictionary is drawn in
+#' purple, so that a point computed for one source is never mistaken for the
+#' median of herbarium records.
+#'
+#' @param source Values of the `source` column.
+#'
+#' @return Colours, one per value.
+#' @noRd
+candidate_colour <- function(source) {
+  ifelse(is.na(source) | source == "rainbio", "#fd7e14", "#6f42c1")
 }
 
 #' Shorten a string for display, marking that it was shortened

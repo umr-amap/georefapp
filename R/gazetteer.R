@@ -106,6 +106,9 @@ gazetteer_file <- function(file) {
 #' @param df_max_frac Tokens present in more than this fraction of the corpus
 #'   are not posted; see [build_token_index()].
 #' @param overwrite Replace an existing snapshot at `file`.
+#' @param label Short name of the dictionary, reported as `source` on every
+#'   candidate it returns, so that the evidence panel can tell dictionaries
+#'   apart when several are in use (see [candidates_combine()]).
 #'
 #' @return The snapshot file, invisibly.
 #'
@@ -115,7 +118,8 @@ gazetteer_snapshot_build <- function(src,
                                      snapshot_id = NULL,
                                      table = "rainbio_gazetteer_localities",
                                      df_max_frac = 0.05,
-                                     overwrite = FALSE) {
+                                     overwrite = FALSE,
+                                     label = "rainbio") {
   # Resolved and checked before the read, not after: fetching and indexing
   # 360,000 localities takes half a minute, and a bad destination should not
   # cost it.
@@ -183,10 +187,10 @@ gazetteer_snapshot_build <- function(src,
   id <- snapshot_id %||% paste0(tools::file_path_sans_ext(basename(file)), "-",
                                 format(Sys.Date(), "%Y%m%d"))
   meta <- data.frame(
-    key = c("snapshot_id", "built_at", "source", "n_localities", "n_georeferenced",
+    key = c("snapshot_id", "label", "built_at", "source", "n_localities", "n_georeferenced",
             "n_tokens", "n_indexed_tokens", "n_postings", "df_max_frac", "app_version"),
     value = as.character(c(
-      id, iso_now(), if (is.data.frame(src)) "data frame" else table,
+      id, label, iso_now(), if (is.data.frame(src)) "data frame" else table,
       nrow(loc), sum(loc$is_georeferenced == 1L), nrow(idx$tokens),
       sum(idx$tokens$indexed == 1L), nrow(idx$postings), df_max_frac, app_version()
     )),
@@ -221,6 +225,11 @@ gazetteer_open <- function(file) {
 #'
 #' @export
 gazetteer_close <- function(con) {
+  # A combined provider holds one connection per dictionary.
+  if (is.list(con)) {
+    for (x in con) gazetteer_close(x)
+    return(invisible(TRUE))
+  }
   if (!is.null(con) && DBI::dbIsValid(con)) DBI::dbDisconnect(con)
   invisible(TRUE)
 }
@@ -259,13 +268,14 @@ gazetteer_info <- function(con) {
 #' @param min_coverage Discard candidates accounting for less than this
 #'   fraction of the query's weight.
 #' @param georeferenced_only Return only candidates that can be drawn.
+#' @param source Label reported in the `source` column.
 #'
 #' @return A tibble shaped like [candidates_empty()], best first. The tokens
 #'   the query was reduced to are attached as the `query` attribute.
 #'
 #' @export
 gazetteer_search <- function(con, text, limit = 20L, min_coverage = 0.34,
-                             georeferenced_only = FALSE) {
+                             georeferenced_only = FALSE, source = "rainbio") {
   empty <- candidates_empty()
   toks <- locality_tokens(text)[[1]]
   if (length(toks) == 0) return(empty)
@@ -328,7 +338,7 @@ gazetteer_search <- function(con, text, limit = 20L, min_coverage = 0.34,
     coverage = res$shared_w / q$total,
     overlap = res$shared_w / (q$total + res$token_weight - res$shared_w),
     n_matched = as.integer(res$n_matched),
-    source = "rainbio"
+    source = source
   )
   attr(out, "query") <- q
   out
@@ -356,11 +366,14 @@ gazetteer_search <- function(con, text, limit = 20L, min_coverage = 0.34,
 #' @export
 gazetteer_provider <- function(file, ...) {
   con <- gazetteer_open(file)
-  options(georefapp.candidates_snapshot = unname(gazetteer_info(con)["snapshot_id"]))
+  info <- gazetteer_info(con)
+  options(georefapp.candidates_snapshot = unname(info["snapshot_id"]))
+  # Snapshots built before labels existed are RAINBIO ones.
+  label <- if ("label" %in% names(info)) unname(info[["label"]]) else "rainbio"
   f <- function(locality_key, verbatim = NULL, limit = 10L) {
     text <- if (!is.null(verbatim) && !is.na(verbatim) && nzchar(verbatim))
       verbatim else locality_key
-    gazetteer_search(con, text, limit = limit, ...)
+    gazetteer_search(con, text, limit = limit, source = label, ...)
   }
   attr(f, "con") <- con
   f

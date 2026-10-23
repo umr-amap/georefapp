@@ -525,3 +525,8 @@ test_that("the import page warns about unusable identifiers and blank localities
     expect_match(html, "country", fixed = TRUE)
   })
 })
+
+test_that("candidates from another dictionary are drawn apart from RAINBIO", {
+  expect_equal(candidate_colour(c("rainbio", "mandango-km", NA)),
+               c("#fd7e14", "#6f42c1", "#fd7e14"))
+})

@@ -97,3 +97,59 @@ candidates_query <- function(locality_key, verbatim = NULL, limit = 10L) {
 candidates_snapshot <- function() {
   as_chr1(getOption("georefapp.candidates_snapshot", default = NA_character_))
 }
+
+#' Combine several candidate providers into one
+#'
+#' Each dictionary is searched separately and its candidates are listed after
+#' those of the providers before it. Results are stacked, not merged and
+#' re-ranked: coverage is measured against each dictionary's own vocabulary, so
+#' a 100% match in a dictionary of eighty islands and a 100% match in RAINBIO
+#' are not the same claim, and sorting them together would pretend they were.
+#' The `source` column says which dictionary each candidate came from.
+#'
+#' A provider that fails is reported and skipped; the others still answer, as
+#' the georeferencing loop must never depend on every dictionary being
+#' reachable.
+#'
+#' @param ... Functions with the candidate provider signature, in the order
+#'   their candidates should be listed.
+#'
+#' @return A function with the candidate provider signature. The providers are
+#'   attached as the `providers` attribute.
+#'
+#' @examples
+#' \dontrun{
+#' p <- candidates_combine(gazetteer_provider("rainbio-gazetteer.sqlite"),
+#'                         gazetteer_provider("mandango1982-iles.sqlite"))
+#' options(georefapp.candidates = p)
+#' }
+#'
+#' @export
+candidates_combine <- function(...) {
+  providers <- Filter(is.function, list(...))
+  f <- function(locality_key, verbatim = NULL, limit = 10L) {
+    parts <- lapply(providers, function(p) {
+      tryCatch(
+        p(locality_key = locality_key, verbatim = verbatim, limit = limit),
+        error = function(e) {
+          warning("Candidate provider failed: ", conditionMessage(e), call. = FALSE)
+          candidates_empty()
+        }
+      )
+    })
+    parts <- Filter(is.data.frame, parts)
+    # The tokens a query was reduced to drive the panel's "not searched on"
+    # note. They are the first dictionary's, the one listed first.
+    query <- if (length(parts)) attr(parts[[1]], "query") else NULL
+    found <- Filter(function(x) nrow(x) > 0, parts)
+    out <- if (length(found)) {
+      dplyr::bind_rows(lapply(found, function(x) x[, names(candidates_empty())]))
+    } else {
+      candidates_empty()
+    }
+    attr(out, "query") <- query
+    out
+  }
+  attr(f, "providers") <- providers
+  f
+}

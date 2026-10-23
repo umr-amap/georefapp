@@ -10,7 +10,8 @@ gazetteer_snapshot_build(
   snapshot_id = NULL,
   table = "rainbio_gazetteer_localities",
   df_max_frac = 0.05,
-  overwrite = FALSE
+  overwrite = FALSE,
+  label = "rainbio"
 )
 }
 \arguments{
@@ -29,6 +30,10 @@ snapshot. Defaults to the file name plus the build date.}
 are not posted; see [build_token_index()].}
 
 \item{overwrite}{Replace an existing snapshot at `file`.}
+
+\item{label}{Short name of the dictionary, reported as `source` on every
+candidate it returns, so that the evidence panel can tell dictionaries
+apart when several are in use (see [candidates_combine()]).}
 }
 \value{
 The snapshot file, invisibly.

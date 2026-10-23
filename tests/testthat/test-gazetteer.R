@@ -161,3 +161,102 @@ test_that("a bad destination fails before the corpus is read, not after", {
     gazetteer_snapshot_build(fake_gazetteer(), file.path(dir, "nope", "g.sqlite")),
     "No such directory")
 })
+
+# A second, source-specific dictionary: islands placed by their distance along
+# the river, as built for Mandango (1982).
+fake_islands <- function() {
+  tibble::tibble(
+    locality_id = 1:3,
+    locality_verbatim = c("Ile Mbie / Mbiye 5M, fleuve Lualaba",
+                          "Ile Mafi 5M, fleuve Lualaba",
+                          "Ile Kongolo 15V, fleuve Congo"),
+    locality_key = normalise_locality(locality_verbatim),
+    n_records = c(82L, 14L, 23L), n_records_georef = c(82L, 14L, 23L),
+    n_distinct_coords = 1L, decimal_latitude = c(0.477, 0.477, 0.549),
+    decimal_longitude = c(25.221, 25.221, 25.062), span_deg = NA_real_,
+    n_name_variants = 1L, is_georeferenced = 1L
+  )
+}
+
+local_snapshot_file <- function(src, id, label, env = parent.frame(), ...) {
+  file <- withr::local_tempfile(fileext = ".sqlite", .local_envir = env)
+  unlink(file)
+  suppressMessages(gazetteer_snapshot_build(src, file, snapshot_id = id,
+                                            label = label, ...))
+  file
+}
+
+test_that("a snapshot's label is reported as the source of its candidates", {
+  file <- local_snapshot_file(fake_islands(), "islands-1", "mandango-km",
+                              df_max_frac = 0.5)
+  withr::local_options(georefapp.candidates = NULL,
+                       georefapp.candidates_snapshot = NULL)
+  p <- gazetteer_provider(file, min_coverage = 0.3)
+  on.exit(gazetteer_close(attr(p, "con")), add = TRUE)
+  hits <- p("ile mbie 5m a 2 km de la pointe aval",
+            "Ile Mbie 5M, a 2 km de la pointe aval")
+  expect_equal(hits$source[1], "mandango-km")
+  expect_match(hits$locality_verbatim[1], "Mbie")
+})
+
+test_that("a snapshot built without a label still reads as RAINBIO", {
+  # Older snapshots have no label row at all.
+  file <- withr::local_tempfile(fileext = ".sqlite")
+  unlink(file)
+  suppressMessages(gazetteer_snapshot_build(fake_gazetteer(), file, snapshot_id = "old"))
+  rw <- DBI::dbConnect(RSQLite::SQLite(), file)
+  DBI::dbExecute(rw, "DELETE FROM gaz_meta WHERE key = 'label'")
+  DBI::dbDisconnect(rw)
+  withr::local_options(georefapp.candidates_snapshot = NULL)
+  p <- gazetteer_provider(file)
+  on.exit(gazetteer_close(attr(p, "con")), add = TRUE)
+  hits <- p("mbandza", "Mbandza")
+  expect_true(all(hits$source == "rainbio"))
+})
+
+test_that("combined providers are listed one dictionary after the other", {
+  a <- function(locality_key, verbatim = NULL, limit = 10L) {
+    out <- candidates_empty()
+    out[1, "candidate_id"] <- "r1"; out$source <- "rainbio"
+    attr(out, "query") <- list(token = "mbie")
+    out
+  }
+  b <- function(locality_key, verbatim = NULL, limit = 10L) {
+    out <- candidates_empty()
+    out[1, "candidate_id"] <- "k1"; out$source <- "mandango-km"
+    out
+  }
+  p <- candidates_combine(a, b)
+  hits <- p("ile mbie")
+  expect_equal(hits$candidate_id, c("r1", "k1"))
+  expect_named(hits, names(candidates_empty()))
+  expect_equal(attr(hits, "query")$token, "mbie")
+})
+
+test_that("one failing dictionary does not silence the others", {
+  ok <- function(locality_key, verbatim = NULL, limit = 10L) {
+    out <- candidates_empty(); out[1, "candidate_id"] <- "k1"; out
+  }
+  broken <- function(locality_key, verbatim = NULL, limit = 10L) stop("offline")
+  p <- candidates_combine(broken, ok)
+  expect_warning(hits <- p("ile mbie"), "offline")
+  expect_equal(hits$candidate_id, "k1")
+
+  none <- candidates_combine(function(...) candidates_empty())("x")
+  expect_equal(nrow(none), 0L)
+  expect_named(none, names(candidates_empty()))
+})
+
+test_that("using two snapshots stamps decisions with both identifiers", {
+  f1 <- local_snapshot_file(fake_gazetteer(), "rainbio-test", "rainbio")
+  f2 <- local_snapshot_file(fake_islands(), "islands-1", "mandango-km",
+                            df_max_frac = 0.5)
+  withr::local_options(georefapp.candidates = NULL,
+                       georefapp.candidates_snapshot = NULL)
+  p <- suppressMessages(use_gazetteer(c(f1, f2), min_coverage = 0.3))
+  on.exit(gazetteer_close(attr(p, "con")), add = TRUE)
+  expect_equal(candidates_snapshot(), "rainbio-test + islands-1")
+  expect_length(attr(p, "con"), 2L)
+  hits <- candidates_query("ile kongolo 15v", "Ile Kongolo 15V")
+  expect_true("mandango-km" %in% hits$source)
+})

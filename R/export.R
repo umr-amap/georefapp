@@ -57,7 +57,10 @@ dwc_footprints <- function(con) {
         NULL
       }
       if (is.null(g) || length(g) == 0 || all(sf::st_is_empty(g))) return(NULL)
-      sf::st_cast(sf::st_union(g), cast_to)
+      # Combined, not unioned: the footprint was already unioned when it was
+      # decided, and st_union() on lon/lat goes through s2, which refuses the
+      # duplicate vertices that footprints saved at low WKT precision carry.
+      sf::st_cast(sf::st_combine(g), cast_to)
     })
     keep <- which(!vapply(parts, is.null, logical(1)))
     g <- if (length(keep)) do.call(c, parts[keep]) else sf::st_sfc(crs = 4326)

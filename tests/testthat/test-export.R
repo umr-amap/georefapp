@@ -31,6 +31,36 @@ test_that("footprints split into polygon and line layers with their records", {
   expect_false("village" %in% c(fp$polygons$localityKey, fp$lines$localityKey))
 })
 
+local_small_circle <- function(env = parent.frame()) {
+  path <- withr::local_tempfile(fileext = ".sqlite", .local_envir = env)
+  con <- store_open(path)
+  withr::defer(store_close(con), envir = env)
+  store_write_records(con, data.frame(
+    record_id = "a", locality_key = "spot", verbatim_locality = "Spot",
+    stringsAsFactors = FALSE
+  ))
+  pt <- sf::st_sfc(sf::st_point(c(15.123456, -0.54321)), crs = 4326)
+  attr(pt, "radius") <- 50
+  list(con = con, metrics = georef_metrics(pt))
+}
+
+test_that("a small circle survives the round trip through the store and export", {
+  # Written at 7 significant digits, a 50 m circle has neighbouring vertices
+  # collapsed into duplicates, which s2 refuses.
+  p <- local_small_circle()
+  expect_true(all(sf::st_is_valid(sf::st_as_sfc(p$metrics$footprint_wkt, crs = 4326))))
+  store_add_decision(p$con, "spot", "drawn", p$metrics)
+  expect_equal(nrow(dwc_footprints(p$con)$polygons), 1L)
+})
+
+test_that("footprints already saved at low precision still export", {
+  p <- local_small_circle()
+  m <- p$metrics
+  m$footprint_wkt <- sf::st_as_text(sf::st_as_sfc(m$footprint_wkt), digits = 7)
+  store_add_decision(p$con, "spot", "drawn", m)
+  expect_equal(nrow(dwc_footprints(p$con)$polygons), 1L)
+})
+
 test_that("an empty project yields empty layers and no GeoPackage", {
   path <- withr::local_tempfile(fileext = ".sqlite")
   con <- store_open(path)

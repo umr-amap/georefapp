@@ -95,7 +95,10 @@ georef_metrics <- function(geom, point_radius_m = 0, centre = c("mbc", "inside")
     coordinate_precision = 1e-7,
     point_radius_spatial_fit = fit,
     footprint_area_m2 = round(area_m2),
-    footprint_wkt = sf::st_as_text(fp_ll),
+    # st_as_text() defaults to 7 significant digits: about 1 m of longitude,
+    # which collapses neighbouring vertices of a small circle into duplicates.
+    # Ten digits keep at least 7 decimals at any longitude.
+    footprint_wkt = sf::st_as_text(fp_ll, digits = 10),
     footprint_srs = "EPSG:4326",
     geodetic_datum = "EPSG:4326",
     centre_rule = centre

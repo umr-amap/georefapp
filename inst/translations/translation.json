@@ -1,0 +1,616 @@
+{
+  "languages": [
+    "en",
+    "fr"
+  ],
+  "translation": [
+    {
+      "en": "Import",
+      "fr": "Importer"
+    },
+    {
+      "en": "Georeference",
+      "fr": "Géoréférencer"
+    },
+    {
+      "en": "Export",
+      "fr": "Exporter"
+    },
+    {
+      "en": "no project",
+      "fr": "aucun projet"
+    },
+    {
+      "en": "Project",
+      "fr": "Projet"
+    },
+    {
+      "en": "saved as you go",
+      "fr": "enregistré au fil de l'eau"
+    },
+    {
+      "en": "path copied",
+      "fr": "chemin copié"
+    },
+    {
+      "en": "copy path",
+      "fr": "copier le chemin"
+    },
+    {
+      "en": "Your results",
+      "fr": "Vos résultats"
+    },
+    {
+      "en": "Download",
+      "fr": "Télécharger"
+    },
+    {
+      "en": "Darwin Core table (CSV)",
+      "fr": "Table Darwin Core (CSV)"
+    },
+    {
+      "en": "One row per imported record, with its coordinates and uncertainty. This is the table for your dataset or database.",
+      "fr": "Une ligne par enregistrement importé, avec ses coordonnées et son incertitude. C'est la table destinée à votre jeu de données ou à votre base."
+    },
+    {
+      "en": "Decision log (CSV)",
+      "fr": "Journal des décisions (CSV)"
+    },
+    {
+      "en": "Every decision ever made, revisions included. The audit trail: keep it with the table, and publish it alongside.",
+      "fr": "Toutes les décisions prises, révisions comprises. C'est la piste d'audit : conservez-la avec la table et publiez-la avec elle."
+    },
+    {
+      "en": "Exporting is safe at any time and can be repeated: the project file already holds every decision, and these files are rebuilt from it.",
+      "fr": "Vous pouvez exporter à tout moment, et autant de fois que nécessaire : le fichier de projet contient déjà toutes les décisions, et ces fichiers sont reconstruits à partir de lui."
+    },
+    {
+      "en": "Darwin Core preview",
+      "fr": "Aperçu Darwin Core"
+    },
+    {
+      "en": "No project open. Open or create one on the Import page.",
+      "fr": "Aucun projet ouvert. Ouvrez-en un ou créez-en un sur la page Importer."
+    },
+    {
+      "en": "of %s records georeferenced.",
+      "fr": "enregistrements géoréférencés sur %s."
+    },
+    {
+      "en": "%d localities still pending.",
+      "fr": "%d localités encore en attente."
+    },
+    {
+      "en": "%d marked unresolvable.",
+      "fr": "%d marquées comme impossibles à géoréférencer."
+    },
+    {
+      "en": "Project file:",
+      "fr": "Fichier de projet :"
+    },
+    {
+      "en": "Save all files next to the project",
+      "fr": "Enregistrer tous les fichiers à côté du projet"
+    },
+    {
+      "en": "Into",
+      "fr": "Dans"
+    },
+    {
+      "en": "Saved:",
+      "fr": "Enregistré :"
+    },
+    {
+      "en": "Footprints (GeoPackage): nothing decided yet.",
+      "fr": "Emprises (GeoPackage) : aucune décision pour l'instant."
+    },
+    {
+      "en": "Footprints (GeoPackage)",
+      "fr": "Emprises (GeoPackage)"
+    },
+    {
+      "en": "%d footprints as map layers, for QGIS or ArcGIS: areas and uncertainty envelopes.",
+      "fr": "%d emprises en couches cartographiques, pour QGIS ou ArcGIS : surfaces et enveloppes d'incertitude."
+    },
+    {
+      "en": "%d footprint as a map layer, for QGIS or ArcGIS: areas and uncertainty envelopes.",
+      "fr": "%d emprise en couche cartographique, pour QGIS ou ArcGIS : surfaces et enveloppes d'incertitude."
+    },
+    {
+      "en": "Continue a project",
+      "fr": "Reprendre un projet"
+    },
+    {
+      "en": "Or start a new one: 1. Locality table",
+      "fr": "Ou en commencer un nouveau : 1. Table des localités"
+    },
+    {
+      "en": "CSV, TSV or Excel file",
+      "fr": "Fichier CSV, TSV ou Excel"
+    },
+    {
+      "en": "Browse...",
+      "fr": "Parcourir..."
+    },
+    {
+      "en": "No file selected",
+      "fr": "Aucun fichier sélectionné"
+    },
+    {
+      "en": "or load the bundled example",
+      "fr": "ou charger l'exemple fourni"
+    },
+    {
+      "en": "Preview",
+      "fr": "Aperçu"
+    },
+    {
+      "en": "(none)",
+      "fr": "(aucune)"
+    },
+    {
+      "en": "2. Which column is which",
+      "fr": "2. Rôle de chaque colonne"
+    },
+    {
+      "en": "Locality text (required)",
+      "fr": "Texte de la localité (obligatoire)"
+    },
+    {
+      "en": "Record identifier",
+      "fr": "Identifiant de l'enregistrement"
+    },
+    {
+      "en": "(generate one)",
+      "fr": "(en générer un)"
+    },
+    {
+      "en": "Country",
+      "fr": "Pays"
+    },
+    {
+      "en": "Province or region",
+      "fr": "Province ou région"
+    },
+    {
+      "en": "records collapse to",
+      "fr": "enregistrements se regroupent en"
+    },
+    {
+      "en": "distinct localities",
+      "fr": "localités distinctes"
+    },
+    {
+      "en": "(%.0f%% of the work removed by grouping)",
+      "fr": "(%.0f %% du travail économisé par le regroupement)"
+    },
+    {
+      "en": "%s records have no usable locality text and will be carried through with empty coordinates.",
+      "fr": "%s enregistrements n'ont pas de texte de localité exploitable et seront conservés avec des coordonnées vides."
+    },
+    {
+      "en": "%s record has no usable locality text and will be carried through with empty coordinates.",
+      "fr": "%s enregistrement n'a pas de texte de localité exploitable et sera conservé avec des coordonnées vides."
+    },
+    {
+      "en": "Record",
+      "fr": "Enregistrement"
+    },
+    {
+      "en": "Verbatim locality",
+      "fr": "Localité verbatim"
+    },
+    {
+      "en": "Grouping key",
+      "fr": "Clé de regroupement"
+    },
+    {
+      "en": "3. Project file",
+      "fr": "3. Fichier de projet"
+    },
+    {
+      "en": "Saved in",
+      "fr": "Enregistré dans"
+    },
+    {
+      "en": "unless you type a full path. This file holds the records and every decision you make, saved as you go; open it again from this page to carry on.",
+      "fr": "sauf si vous saisissez un chemin complet. Ce fichier contient les enregistrements et chacune de vos décisions, enregistrées au fil de l'eau ; rouvrez-le depuis cette page pour reprendre."
+    },
+    {
+      "en": "Create project and start georeferencing",
+      "fr": "Créer le projet et commencer à géoréférencer"
+    },
+    {
+      "en": "%s  (%s records, %s decisions, %s)",
+      "fr": "%s  (%s enregistrements, %s décisions, %s)"
+    },
+    {
+      "en": "No project in the working directory.",
+      "fr": "Aucun projet dans le répertoire de travail."
+    },
+    {
+      "en": "…or the full path to a project file elsewhere",
+      "fr": "…ou le chemin complet d'un fichier de projet situé ailleurs"
+    },
+    {
+      "en": "Open project",
+      "fr": "Ouvrir le projet"
+    },
+    {
+      "en": "Not a georefapp project:",
+      "fr": "Pas un projet georefapp :"
+    },
+    {
+      "en": "Choose a project to open.",
+      "fr": "Choisissez un projet à ouvrir."
+    },
+    {
+      "en": "already exists and is not a georefapp project. Choose another name.",
+      "fr": "existe déjà et n'est pas un projet georefapp. Choisissez un autre nom."
+    },
+    {
+      "en": "This project already exists",
+      "fr": "Ce projet existe déjà"
+    },
+    {
+      "en": "already holds %s records and %s decisions.",
+      "fr": "contient déjà %s enregistrements et %s décisions."
+    },
+    {
+      "en": "Open it to carry on where you left off. Re-importing replaces its records with this table and keeps every decision, which is the way to bring in a corrected table. To start afresh, cancel and choose another name.",
+      "fr": "Ouvrez-le pour reprendre là où vous vous étiez arrêté. Réimporter remplace ses enregistrements par cette table et conserve toutes les décisions : c'est ainsi qu'on intègre une table corrigée. Pour repartir de zéro, annulez et choisissez un autre nom."
+    },
+    {
+      "en": "Cancel",
+      "fr": "Annuler"
+    },
+    {
+      "en": "Re-import records",
+      "fr": "Réimporter les enregistrements"
+    },
+    {
+      "en": "Open it",
+      "fr": "L'ouvrir"
+    },
+    {
+      "en": "%s rows have no value",
+      "fr": "%s lignes n'ont pas de valeur"
+    },
+    {
+      "en": "%s row has no value",
+      "fr": "%s ligne n'a pas de valeur"
+    },
+    {
+      "en": "%s rows share a value with another row (e.g. %s)",
+      "fr": "%s lignes partagent une valeur avec une autre ligne (p. ex. %s)"
+    },
+    {
+      "en": "The column ‘%s’ cannot identify your records:",
+      "fr": "La colonne ‘%s’ ne permet pas d'identifier vos enregistrements :"
+    },
+    {
+      "en": "Row numbers (r000001, r000002, …) will be used as record identifiers instead, so the results can only be joined back to this file by row order, not by your own identifiers. Choose a column with a unique value on every row, or fix the file and load it again.",
+      "fr": "Les numéros de ligne (r000001, r000002, …) serviront d'identifiants à la place : les résultats ne pourront être rattachés à ce fichier que par l'ordre des lignes, pas par vos propres identifiants. Choisissez une colonne dont la valeur est unique sur chaque ligne, ou corrigez le fichier et rechargez-le."
+    },
+    {
+      "en": "Show similar localities on the map",
+      "fr": "Afficher les localités similaires sur la carte"
+    },
+    {
+      "en": "Interpretation",
+      "fr": "Interprétation"
+    },
+    {
+      "en": "Radius for a bare point (m)",
+      "fr": "Rayon pour un point seul (m)"
+    },
+    {
+      "en": "What does this radius do?",
+      "fr": "À quoi sert ce rayon ?"
+    },
+    {
+      "en": "Radius for a bare point",
+      "fr": "Rayon pour un point seul"
+    },
+    {
+      "en": "Only for markers. It becomes the uncertainty: how far from the marker the place could be.",
+      "fr": "Uniquement pour les marqueurs. Il devient l'incertitude : la distance du marqueur à laquelle le lieu peut se trouver."
+    },
+    {
+      "en": "Force the coordinate onto the footprint",
+      "fr": "Placer la coordonnée sur l'emprise"
+    },
+    {
+      "en": "The shape is the locality itself (an area)",
+      "fr": "La forme est la localité elle-même (une surface)"
+    },
+    {
+      "en": "Import an area from a file",
+      "fr": "Importer une surface depuis un fichier"
+    },
+    {
+      "en": "Layer",
+      "fr": "Couche"
+    },
+    {
+      "en": "Name features by",
+      "fr": "Nommer les entités par"
+    },
+    {
+      "en": "Features making up this locality",
+      "fr": "Entités formant cette localité"
+    },
+    {
+      "en": "Type to search",
+      "fr": "Tapez pour rechercher"
+    },
+    {
+      "en": "Simplify boundary to (m, 0 = keep as is)",
+      "fr": "Simplifier le contour à (m, 0 = tel quel)"
+    },
+    {
+      "en": "Provenance",
+      "fr": "Provenance"
+    },
+    {
+      "en": "Georeferenced by",
+      "fr": "Géoréférencé par"
+    },
+    {
+      "en": "Sources consulted",
+      "fr": "Sources consultées"
+    },
+    {
+      "en": "Remarks",
+      "fr": "Remarques"
+    },
+    {
+      "en": "Why this interpretation?",
+      "fr": "Pourquoi cette interprétation ?"
+    },
+    {
+      "en": "Save georeference",
+      "fr": "Enregistrer le géoréférencement"
+    },
+    {
+      "en": "Cannot be georeferenced",
+      "fr": "Impossible à géoréférencer"
+    },
+    {
+      "en": "No project open.",
+      "fr": "Aucun projet ouvert."
+    },
+    {
+      "en": "Import a locality table on the Import page to begin.",
+      "fr": "Importez une table de localités sur la page Importer pour commencer."
+    },
+    {
+      "en": "%d of %d localities",
+      "fr": "%d localités sur %d"
+    },
+    {
+      "en": "%s of %s records",
+      "fr": "%s enregistrements sur %s"
+    },
+    {
+      "en": "Export results →",
+      "fr": "Exporter les résultats →"
+    },
+    {
+      "en": "All localities decided",
+      "fr": "Toutes les localités sont traitées"
+    },
+    {
+      "en": "%s of %s records now carry a georeference%s.",
+      "fr": "%s enregistrements sur %s ont désormais un géoréférencement%s."
+    },
+    {
+      "en": "; %d localities were marked unresolvable",
+      "fr": " ; %d localités ont été marquées impossibles à géoréférencer"
+    },
+    {
+      "en": "Every decision is already saved in the project file. The Export page turns it into a Darwin Core table, the decision log and a GIS file of the footprints.",
+      "fr": "Chaque décision est déjà enregistrée dans le fichier de projet. La page Exporter en tire une table Darwin Core, le journal des décisions et un fichier SIG des emprises."
+    },
+    {
+      "en": "Stay here",
+      "fr": "Rester ici"
+    },
+    {
+      "en": "Go to Export",
+      "fr": "Aller à l'export"
+    },
+    {
+      "en": "Locality",
+      "fr": "Localité"
+    },
+    {
+      "en": "Select a locality",
+      "fr": "Sélectionnez une localité"
+    },
+    {
+      "en": "%d records",
+      "fr": "%d enregistrements"
+    },
+    {
+      "en": "%d record",
+      "fr": "%d enregistrement"
+    },
+    {
+      "en": "already georeferenced — saving will supersede it",
+      "fr": "déjà géoréférencée — enregistrer remplacera la décision"
+    },
+    {
+      "en": "The file holds no polygon layer.",
+      "fr": "Le fichier ne contient aucune couche de polygones."
+    },
+    {
+      "en": "(feature number)",
+      "fr": "(numéro d'entité)"
+    },
+    {
+      "en": "Feature",
+      "fr": "Entité"
+    },
+    {
+      "en": "Draw a point, circle, line or polygon on the map, or import an area.",
+      "fr": "Dessinez un point, un cercle, une ligne ou un polygone sur la carte, ou importez une surface."
+    },
+    {
+      "en": "Latitude",
+      "fr": "Latitude"
+    },
+    {
+      "en": "Longitude",
+      "fr": "Longitude"
+    },
+    {
+      "en": "Uncertainty",
+      "fr": "Incertitude"
+    },
+    {
+      "en": "Spatial fit",
+      "fr": "Ajustement spatial"
+    },
+    {
+      "en": "undefined",
+      "fr": "indéfini"
+    },
+    {
+      "en": "Area",
+      "fr": "Surface"
+    },
+    {
+      "en": "Centre rule",
+      "fr": "Règle du centre"
+    },
+    {
+      "en": "Includes the %s m radius set for markers, under Interpretation.",
+      "fr": "Inclut le rayon de %s m défini pour les marqueurs, sous Interprétation."
+    },
+    {
+      "en": "Using the imported area; shapes drawn on the map are ignored.",
+      "fr": "La surface importée est utilisée ; les formes dessinées sur la carte sont ignorées."
+    },
+    {
+      "en": "An area needs a footprint with an area: a line or a bare point cannot be one.",
+      "fr": "Une surface exige une emprise qui a une superficie : une ligne ou un point seul ne peut pas en être une."
+    },
+    {
+      "en": "The footprint is %s kB of text, written on each of %d records. Consider simplifying the boundary.",
+      "fr": "L'emprise fait %s ko de texte, écrits sur chacun des %d enregistrements. Pensez à simplifier le contour."
+    },
+    {
+      "en": "The footprint is %s kB of text, written on %d record. Consider simplifying the boundary.",
+      "fr": "L'emprise fait %s ko de texte, écrits sur %d enregistrement. Pensez à simplifier le contour."
+    },
+    {
+      "en": "A radius of zero claims the locality is known exactly. Set a radius before saving.",
+      "fr": "Un rayon nul affirme que la localité est connue exactement. Indiquez un rayon avant d'enregistrer."
+    },
+    {
+      "en": "Draw a footprint on the map first.",
+      "fr": "Dessinez d'abord une emprise sur la carte."
+    },
+    {
+      "en": "Set a radius: a zero uncertainty claims the locality is known exactly.",
+      "fr": "Indiquez un rayon : une incertitude nulle affirme que la localité est connue exactement."
+    },
+    {
+      "en": "An area needs a footprint with an area. Draw a polygon or circle, or untick the area box.",
+      "fr": "Une surface exige une emprise qui a une superficie. Dessinez un polygone ou un cercle, ou décochez la case surface."
+    },
+    {
+      "en": "Similar localities",
+      "fr": "Localités similaires"
+    },
+    {
+      "en": "No locality dictionary is configured.",
+      "fr": "Aucun dictionnaire de localités n'est configuré."
+    },
+    {
+      "en": "See gazetteer_provider().",
+      "fr": "Voir gazetteer_provider()."
+    },
+    {
+      "en": "Nothing distinctive to search on: every word in this locality is common across the dictionary.",
+      "fr": "Rien de distinctif à rechercher : tous les mots de cette localité sont courants dans le dictionnaire."
+    },
+    {
+      "en": "No similar locality found in the dictionary.",
+      "fr": "Aucune localité similaire dans le dictionnaire."
+    },
+    {
+      "en": "%d coords",
+      "fr": "%d coord."
+    },
+    {
+      "en": "%d coord",
+      "fr": "%d coord."
+    },
+    {
+      "en": "not georeferenced",
+      "fr": "non géoréférencée"
+    },
+    {
+      "en": "%.0f%% match",
+      "fr": "correspondance %.0f %%"
+    },
+    {
+      "en": "Not searched on:",
+      "fr": "Non recherché :"
+    },
+    {
+      "en": "%d records, %s distinct coordinates",
+      "fr": "%d enregistrements, %s coordonnées distinctes"
+    },
+    {
+      "en": "Current footprint",
+      "fr": "Emprise actuelle"
+    },
+    {
+      "en": "Current georeference",
+      "fr": "Géoréférencement actuel"
+    },
+    {
+      "en": "Imported area",
+      "fr": "Surface importée"
+    },
+    {
+      "en": "A marker on its own says nothing about how big the place is. This radius is drawn around each marker, and the result is treated like a circle you had drawn yourself.",
+      "fr": "Un marqueur seul ne dit rien de l'étendue du lieu. Ce rayon est tracé autour de chaque marqueur, et le résultat est traité comme un cercle que vous auriez dessiné vous-même."
+    },
+    {
+      "en": "What it changes.",
+      "fr": "Ce qu'il change."
+    },
+    {
+      "en": "It becomes coordinateUncertaintyInMeters for every record sharing the locality: the claim that the specimen was collected within that distance of the coordinate. Too small overstates how precisely the place is known; too large throws away precision you had.",
+      "fr": "Il devient coordinateUncertaintyInMeters pour chaque enregistrement de la localité : l'affirmation que le spécimen a été récolté à moins de cette distance de la coordonnée. Trop petit, il surestime la précision avec laquelle le lieu est connu ; trop grand, il gaspille une précision que vous aviez."
+    },
+    {
+      "en": "What it does not touch.",
+      "fr": "Ce qu'il ne touche pas."
+    },
+    {
+      "en": "Circles keep their own radius. Lines and polygons are used as drawn. A marker drawn together with other shapes gets the radius before the enclosing circle is computed. Saved georeferences are not changed; the value applies to what you save next, and stays set for the next locality.",
+      "fr": "Les cercles gardent leur propre rayon. Les lignes et polygones sont utilisés tels que dessinés. Un marqueur dessiné avec d'autres formes reçoit le rayon avant le calcul du cercle englobant. Les géoréférencements déjà enregistrés ne changent pas ; la valeur s'applique à ce que vous enregistrerez ensuite, et reste en place pour la localité suivante."
+    },
+    {
+      "en": "Choosing it.",
+      "fr": "Comment le choisir."
+    },
+    {
+      "en": "Cover the extent of the place the text names: from the marker to the farthest edge of the village, camp or town. Add the imprecision of the source: a coarse map, a guessed position. Zero is refused, since it claims the spot is known exactly.",
+      "fr": "Couvrez l'étendue du lieu nommé par le texte : du marqueur jusqu'au bord le plus éloigné du village, du campement ou de la ville. Ajoutez l'imprécision de la source : une carte grossière, une position devinée. Zéro est refusé, car il affirme que l'endroit est connu exactement."
+    },
+    {
+      "en": "Darwin Core table (Excel)",
+      "fr": "Table Darwin Core (Excel)"
+    },
+    {
+      "en": "The same table, with a second sheet explaining every column: its Darwin Core definition and how georefapp fills it.",
+      "fr": "La même table, avec une seconde feuille qui explique chaque colonne : sa définition Darwin Core et la façon dont georefapp la remplit."
+    }
+  ]
+}

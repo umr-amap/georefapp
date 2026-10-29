@@ -32,6 +32,9 @@ inst/*
 # which is shipped package data rather than internal material.
 !inst/extdata/
 
+# ...and the interface dictionary, read by georef_translator() at launch.
+!inst/translations/
+
 # Local only, restated explicitly: internal planning notes that must not reach
 # the repository even if the inst/ rules above are ever loosened. The last
 # matching pattern wins in git, so these survive any negation added later.

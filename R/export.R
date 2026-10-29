@@ -113,6 +113,8 @@ export_file_name <- function(project, what, ext, date = Sys.Date()) {
 #'
 #' * `<project>_dwc_<date>.csv` -- the Darwin Core table, one row per record.
 #'   This is what goes into a database or a publication.
+#' * `<project>_dwc_<date>.xlsx` -- the same table, with a second sheet
+#'   explaining every column; see [dwc_columns()].
 #' * `<project>_log_<date>.csv` -- every decision ever made, superseded ones
 #'   included. The audit trail; it should travel with the table.
 #' * `<project>_footprints_<date>.gpkg` -- the footprints as GIS layers, see
@@ -124,7 +126,8 @@ export_file_name <- function(project, what, ext, date = Sys.Date()) {
 #' @param project Path to a project file.
 #' @param dir Directory to write into. Defaults to the project's own folder.
 #'
-#' @return The paths written, invisibly, named `dwc`, `log` and `footprints`.
+#' @return The paths written, invisibly, named `dwc`, `dwc_xlsx`, `log` and
+#'   `footprints`.
 #'
 #' @examples
 #' \dontrun{
@@ -148,10 +151,12 @@ export_project_con <- function(con, project, dir) {
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
   paths <- c(
     dwc = file.path(dir, export_file_name(project, "dwc", "csv")),
+    dwc_xlsx = file.path(dir, export_file_name(project, "dwc", "xlsx")),
     log = file.path(dir, export_file_name(project, "log", "csv")),
     footprints = file.path(dir, export_file_name(project, "footprints", "gpkg"))
   )
   readr::write_csv(dwc_table(con), paths[["dwc"]], na = "")
+  write_dwc_xlsx(con, paths[["dwc_xlsx"]])
   readr::write_csv(store_decisions(con), paths[["log"]], na = "")
   if (length(write_footprints_gpkg(dwc_footprints(con), paths[["footprints"]])) == 0) {
     paths <- paths[names(paths) != "footprints"]

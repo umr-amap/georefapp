@@ -72,10 +72,10 @@ test_that("an empty project yields empty layers and no GeoPackage", {
   expect_false(file.exists(gpkg))
 })
 
-test_that("exporting a project writes all three files beside it", {
+test_that("exporting a project writes all four files beside it", {
   p <- local_decided_project()
   paths <- export_project(p$path)
-  expect_named(paths, c("dwc", "log", "footprints"))
+  expect_named(paths, c("dwc", "dwc_xlsx", "log", "footprints"))
   expect_true(all(file.exists(paths)))
   expect_true(all(dirname(paths) == normalizePath(p$dir, winslash = "/")))
   expect_match(basename(paths[["dwc"]]), "^odzala_dwc_\\d{8}\\.csv$")
@@ -118,4 +118,46 @@ test_that("exported file names carry the project name", {
   expect_equal(export_file_name("C:/work/odzala.sqlite", "dwc", "csv", d),
                "odzala_dwc_20260916.csv")
   expect_equal(export_file_name(NULL, "log", "csv", d), "georef_log_20260916.csv")
+})
+
+test_that("every column of the Darwin Core table is explained, in order", {
+  # A column added to dwc_table() without an entry here fails, so the Excel
+  # export never ships a column nobody explained.
+  cols <- dwc_columns()
+  expect_equal(cols$column, names(dwc_empty()))
+  expect_false(anyNA(cols$definition) || anyNA(cols$in_georefapp))
+  expect_true(all(is.na(cols$term_iri[cols$standard == "georefapp"])))
+})
+
+test_that("the Excel export holds the table and the column dictionary", {
+  p <- local_decided_project()
+  file <- withr::local_tempfile(fileext = ".xlsx")
+  write_dwc_xlsx(p$con, file)
+  expect_equal(readxl::excel_sheets(file), c("dwc", "columns"))
+  dat <- readxl::read_excel(file, "dwc")
+  expect_equal(names(dat), names(dwc_empty()))
+  expect_equal(nrow(dat), 4L)
+  expect_equal(readxl::read_excel(file, "columns")$column, names(dwc_empty()))
+})
+
+test_that("a footprint too long for an Excel cell is replaced, not cut", {
+  path <- withr::local_tempfile(fileext = ".sqlite")
+  con <- store_open(path)
+  withr::defer(store_close(con))
+  store_write_records(con, data.frame(record_id = "a", locality_key = "big",
+                                      verbatim_locality = "Big", stringsAsFactors = FALSE))
+  # A polygon of a few thousand vertices: well over 32 767 characters of WKT.
+  t <- seq(0, 2 * pi, length.out = 3000)
+  ring <- cbind(15 + 0.5 * cos(t), 0.5 * sin(t))
+  ring[nrow(ring), ] <- ring[1, ]
+  m <- georef_metrics(sf::st_sfc(sf::st_polygon(list(ring)), crs = 4326))
+  expect_gt(nchar(m$footprint_wkt), 32767)
+  store_add_decision(con, "big", "area", m)
+
+  file <- withr::local_tempfile(fileext = ".xlsx")
+  write_dwc_xlsx(con, file)
+  dat <- readxl::read_excel(file, "dwc")
+  expect_match(dat$footprintWKT, "too long for an Excel cell", fixed = TRUE)
+  # The CSV route is untouched.
+  expect_equal(dwc_table(con)$footprintWKT, m$footprint_wkt)
 })

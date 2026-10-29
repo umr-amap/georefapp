@@ -12,7 +12,8 @@ export_project(project, dir = dirname(project))
 \item{dir}{Directory to write into. Defaults to the project's own folder.}
 }
 \value{
-The paths written, invisibly, named `dwc`, `log` and `footprints`.
+The paths written, invisibly, named `dwc`, `dwc_xlsx`, `log` and
+  `footprints`.
 }
 \description{
 Writes everything a finished project produces into one directory:
@@ -20,6 +21,8 @@ Writes everything a finished project produces into one directory:
 \details{
 * `<project>_dwc_<date>.csv` -- the Darwin Core table, one row per record.
   This is what goes into a database or a publication.
+* `<project>_dwc_<date>.xlsx` -- the same table, with a second sheet
+  explaining every column; see [dwc_columns()].
 * `<project>_log_<date>.csv` -- every decision ever made, superseded ones
   included. The audit trail; it should travel with the table.
 * `<project>_footprints_<date>.gpkg` -- the footprints as GIS layers, see

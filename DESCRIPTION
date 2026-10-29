@@ -43,7 +43,8 @@ Imports:
     stringi,
     tibble,
     tools,
-    utils
+    utils,
+    writexl
 Suggests:
     knitr,
     rmarkdown,

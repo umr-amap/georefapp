@@ -468,7 +468,7 @@ test_that("saving locally writes the exports beside the project file", {
     {
       session$setInputs(save_local_btn = 1)
       written <- saved_rv()
-      expect_equal(length(written), 3L)
+      expect_equal(length(written), 4L)
       expect_true(all(file.exists(written)))
       expect_true(all(startsWith(basename(written), "field2026_")))
       expect_equal(nrow(footprints_r()$polygons), 1L)

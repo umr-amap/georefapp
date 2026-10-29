@@ -42,6 +42,14 @@ export_ui <- function(id, i18n = georef_translator()) {
           tr("One row per imported record, with its coordinates and uncertainty. This is the table for your dataset or database.")
         ),
         shiny::downloadButton(
+          ns("dwc_xlsx"), tr("Darwin Core table (Excel)"),
+          class = "btn-outline-primary w-100 mb-1"
+        ),
+        shiny::helpText(
+          class = "mb-3",
+          tr("The same table, with a second sheet explaining every column: its Darwin Core definition and how georefapp fills it.")
+        ),
+        shiny::downloadButton(
           ns("log"), tr("Decision log (CSV)"),
           class = "btn-outline-secondary w-100 mb-1"
         ),
@@ -204,6 +212,11 @@ export_server <- function(id, con_r, refresh_r,
     output$dwc <- shiny::downloadHandler(
       filename = function() export_file_name(project_r(), "dwc", "csv"),
       content = function(file) readr::write_csv(dwc_r(), file, na = "")
+    )
+
+    output$dwc_xlsx <- shiny::downloadHandler(
+      filename = function() export_file_name(project_r(), "dwc", "xlsx"),
+      content = function(file) write_dwc_xlsx(shiny::req(con_r()), file)
     )
 
     output$log <- shiny::downloadHandler(

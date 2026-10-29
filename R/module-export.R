@@ -12,6 +12,8 @@
 #' @param project_r A [shiny::reactive()] returning the project file path, used
 #'   to name the exported files and to locate the project folder.
 #' @param local_files Offer to write the files next to the project file.
+#' @param i18n For the UI, a translator from [georef_translator()]; for the
+#'   server, a [shiny::reactive()] returning one.
 #'
 #' @return
 #'  * UI: HTML tags for the export page.
@@ -20,43 +22,41 @@
 #' @name module-export
 #'
 #' @export
-export_ui <- function(id) {
+export_ui <- function(id, i18n = georef_translator()) {
   ns <- shiny::NS(id)
+  tr <- i18n$t
   bslib::layout_columns(
     col_widths = c(4, 8),
     bslib::card(
-      bslib::card_header("Your results"),
+      bslib::card_header(tr("Your results")),
       bslib::card_body(
         shiny::uiOutput(ns("status")),
         shiny::uiOutput(ns("save_local")),
-        shiny::tags$h6("Download"),
+        shiny::tags$h6(tr("Download")),
         shiny::downloadButton(
-          ns("dwc"), "Darwin Core table (CSV)",
+          ns("dwc"), tr("Darwin Core table (CSV)"),
           class = "btn-primary w-100 mb-1"
         ),
         shiny::helpText(
           class = "mb-3",
-          "One row per imported record, with its coordinates and uncertainty.",
-          "This is the table for your dataset or database."
+          tr("One row per imported record, with its coordinates and uncertainty. This is the table for your dataset or database.")
         ),
         shiny::downloadButton(
-          ns("log"), "Decision log (CSV)",
+          ns("log"), tr("Decision log (CSV)"),
           class = "btn-outline-secondary w-100 mb-1"
         ),
         shiny::helpText(
           class = "mb-3",
-          "Every decision ever made, revisions included. The audit trail: keep",
-          "it with the table, and publish it alongside."
+          tr("Every decision ever made, revisions included. The audit trail: keep it with the table, and publish it alongside.")
         ),
         shiny::uiOutput(ns("footprints_button")),
         shiny::helpText(
-          "Exporting is safe at any time and can be repeated: the project file",
-          "already holds every decision, and these files are rebuilt from it."
+          tr("Exporting is safe at any time and can be repeated: the project file already holds every decision, and these files are rebuilt from it.")
         )
       )
     ),
     bslib::card(
-      bslib::card_header("Darwin Core preview"),
+      bslib::card_header(tr("Darwin Core preview")),
       bslib::card_body(reactable::reactableOutput(ns("preview")))
     )
   )
@@ -67,9 +67,11 @@ export_ui <- function(id) {
 #' @export
 export_server <- function(id, con_r, refresh_r,
                           project_r = shiny::reactive(NULL),
-                          local_files = FALSE) {
+                          local_files = FALSE,
+                          i18n = shiny::reactive(georef_translator())) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    tr <- function(x) i18n()$t(x)
 
     dwc_r <- shiny::reactive({
       refresh_r()
@@ -91,7 +93,7 @@ export_server <- function(id, con_r, refresh_r,
       if (is.null(con)) {
         return(shinyWidgets::alert(
           status = "info",
-          "No project open. Open or create one on the Import page."
+          tr("No project open. Open or create one on the Import page.")
         ))
       }
       p <- project_progress(con)
@@ -100,18 +102,18 @@ export_server <- function(id, con_r, refresh_r,
         shinyWidgets::alert(
           status = status,
           shiny::tags$b(format(p$records_done, big.mark = " ")),
-          "of", format(p$records, big.mark = " "), "records georeferenced.",
+          sprintf(tr("of %s records georeferenced."), format(p$records, big.mark = " ")),
           if (p$pending > 0) {
-            shiny::tags$span(sprintf(" %d localities still pending.", p$pending))
+            shiny::tags$span(" ", sprintf(tr("%d localities still pending."), p$pending))
           },
           if (p$unresolvable > 0) {
-            shiny::tags$span(sprintf(" %d marked unresolvable.", p$unresolvable))
+            shiny::tags$span(" ", sprintf(tr("%d marked unresolvable."), p$unresolvable))
           }
         ),
         if (!is.null(project_r())) {
           shiny::tags$p(
             class = "small text-muted",
-            "Project file: ", shiny::tags$code(project_r())
+            tr("Project file:"), " ", shiny::tags$code(project_r())
           )
         }
       )
@@ -124,10 +126,10 @@ export_server <- function(id, con_r, refresh_r,
       if (!isTRUE(local_files) || is.null(con_r()) || is.null(project_r())) return(NULL)
       shiny::tagList(
         shiny::actionButton(
-          ns("save_local_btn"), "Save all files next to the project",
+          ns("save_local_btn"), tr("Save all files next to the project"),
           icon = shiny::icon("folder-open"), class = "btn-success w-100 mb-1"
         ),
-        shiny::helpText(class = "mb-3", "Into ", shiny::tags$code(dirname(project_r()))),
+        shiny::helpText(class = "mb-3", tr("Into"), " ", shiny::tags$code(dirname(project_r()))),
         shiny::uiOutput(ns("saved"))
       )
     })
@@ -149,7 +151,7 @@ export_server <- function(id, con_r, refresh_r,
       if (is.null(paths)) return(NULL)
       shinyWidgets::alert(
         status = "success",
-        shiny::tags$b("Saved:"),
+        shiny::tags$b(tr("Saved:")),
         shiny::tags$ul(
           class = "mb-0 small",
           lapply(unname(paths), function(p) shiny::tags$li(shiny::tags$code(basename(p))))
@@ -161,17 +163,23 @@ export_server <- function(id, con_r, refresh_r,
       fp <- footprints_r()
       n <- nrow(fp$polygons) + nrow(fp$lines)
       if (n == 0) {
-        return(shiny::helpText(class = "mb-3", "Footprints (GeoPackage): nothing decided yet."))
+        return(shiny::helpText(class = "mb-3", tr("Footprints (GeoPackage): nothing decided yet.")))
       }
       shiny::tagList(
         shiny::downloadButton(
-          ns("footprints"), "Footprints (GeoPackage)",
+          ns("footprints"), tr("Footprints (GeoPackage)"),
           class = "btn-outline-secondary w-100 mb-1"
         ),
         shiny::helpText(
           class = "mb-3",
-          sprintf("%d footprint%s as map layers, for QGIS or ArcGIS: areas and uncertainty envelopes.",
-                  n, if (n > 1) "s" else "")
+          sprintf(
+            if (n > 1) {
+              tr("%d footprints as map layers, for QGIS or ArcGIS: areas and uncertainty envelopes.")
+            } else {
+              tr("%d footprint as a map layer, for QGIS or ArcGIS: areas and uncertainty envelopes.")
+            },
+            n
+          )
         )
       )
     })

@@ -6,6 +6,8 @@
 #' project file -- asking first if a project of that name already exists.
 #'
 #' @param id Module id.
+#' @param i18n For the UI, a translator from [georef_translator()]; for the
+#'   server, a [shiny::reactive()] returning one.
 #'
 #' @return
 #'  * UI: HTML tags for the import page.
@@ -15,26 +17,28 @@
 #' @name module-import
 #'
 #' @export
-import_ui <- function(id) {
+import_ui <- function(id, i18n = georef_translator()) {
   ns <- shiny::NS(id)
+  tr <- i18n$t
   bslib::layout_columns(
     col_widths = c(4, 8),
     bslib::card(
-      bslib::card_header("Project"),
-      shiny::tags$h6("Continue a project"),
+      bslib::card_header(tr("Project")),
+      shiny::tags$h6(tr("Continue a project")),
       shiny::uiOutput(ns("existing")),
       shiny::tags$hr(),
-      shiny::tags$h6("Or start a new one: 1. Locality table"),
+      shiny::tags$h6(tr("Or start a new one: 1. Locality table")),
       shiny::fileInput(
-        ns("file"), "CSV, TSV or Excel file",
-        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".xls"), width = "100%"
+        ns("file"), tr("CSV, TSV or Excel file"),
+        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".xls"), width = "100%",
+        buttonLabel = tr("Browse..."), placeholder = i18n_text(i18n, "No file selected")
       ),
-      shiny::actionLink(ns("use_example"), "or load the bundled example"),
+      shiny::actionLink(ns("use_example"), tr("or load the bundled example")),
       shiny::uiOutput(ns("mapping")),
       shiny::uiOutput(ns("create"))
     ),
     bslib::card(
-      bslib::card_header("Preview"),
+      bslib::card_header(tr("Preview")),
       bslib::card_body(
         shiny::uiOutput(ns("summary")),
         reactable::reactableOutput(ns("preview"))
@@ -46,9 +50,10 @@ import_ui <- function(id) {
 #' @rdname module-import
 #'
 #' @export
-import_server <- function(id) {
+import_server <- function(id, i18n = shiny::reactive(georef_translator())) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    tr <- function(x) i18n()$t(x)
     raw_rv <- shiny::reactiveVal(NULL)
     project_rv <- shiny::reactiveVal(NULL)
 
@@ -70,30 +75,38 @@ import_server <- function(id) {
       dat <- raw_rv()
       shiny::req(dat)
       cols <- names(dat)
+      # Re-rendered when the language changes, which must not undo the user's
+      # choice of columns: a column already picked wins over the guess.
+      keep <- function(id, guess) {
+        cur <- shiny::isolate(input[[id]])
+        if (isTRUE(cur %in% cols)) cur else guess
+      }
+      none <- stats::setNames("", tr("(none)"))
       shiny::tagList(
         shiny::tags$hr(),
-        shiny::tags$h6("2. Which column is which"),
+        shiny::tags$h6(tr("2. Which column is which")),
         shiny::selectInput(
-          ns("col_locality"), "Locality text (required)",
-          choices = cols, selected = guess_column(cols, c("locality", "localite", "lieu", "site", "place")),
+          ns("col_locality"), tr("Locality text (required)"),
+          choices = cols,
+          selected = keep("col_locality", guess_column(cols, c("locality", "localite", "lieu", "site", "place"))),
           width = "100%"
         ),
         shiny::selectInput(
-          ns("col_id"), "Record identifier",
-          choices = c("(generate one)" = "", cols),
-          selected = guess_column(cols, c("id", "record", "barcode", "catalog"), default = ""),
+          ns("col_id"), tr("Record identifier"),
+          choices = c(stats::setNames("", tr("(generate one)")), cols),
+          selected = keep("col_id", guess_column(cols, c("id", "record", "barcode", "catalog"), default = "")),
           width = "100%"
         ),
         shiny::selectInput(
-          ns("col_country"), "Country",
-          choices = c("(none)" = "", cols),
-          selected = guess_column(cols, c("country", "pays"), default = ""),
+          ns("col_country"), tr("Country"),
+          choices = c(none, cols),
+          selected = keep("col_country", guess_column(cols, c("country", "pays"), default = "")),
           width = "100%"
         ),
         shiny::selectInput(
-          ns("col_admin1"), "Province or region",
-          choices = c("(none)" = "", cols),
-          selected = guess_column(cols, c("province", "region", "admin1", "state"), default = ""),
+          ns("col_admin1"), tr("Province or region"),
+          choices = c(none, cols),
+          selected = keep("col_admin1", guess_column(cols, c("province", "region", "admin1", "state"), default = "")),
           width = "100%"
         )
       )
@@ -119,14 +132,14 @@ import_server <- function(id) {
       n_key <- length(unique(recs$locality_key[!blank]))
       n_blank <- sum(blank)
       shiny::tagList(
-        id_issue_alert(attr(recs, "id_issue")),
+        id_issue_alert(attr(recs, "id_issue"), i18n()),
         shinyWidgets::alert(
           status = "info",
-          shiny::tags$b(format(nrow(recs), big.mark = " ")), "records collapse to",
-          shiny::tags$b(format(n_key, big.mark = " ")), "distinct localities",
+          shiny::tags$b(format(nrow(recs), big.mark = " ")), tr("records collapse to"),
+          shiny::tags$b(format(n_key, big.mark = " ")), tr("distinct localities"),
           shiny::tags$span(
             class = "text-muted",
-            sprintf(" (%.0f%% of the work removed by grouping)",
+            " ", sprintf(tr("(%.0f%% of the work removed by grouping)"),
                     100 * (1 - n_key / max(nrow(recs), 1)))
           )
         ),
@@ -134,9 +147,12 @@ import_server <- function(id) {
           shinyWidgets::alert(
             status = "warning",
             sprintf(
-              "%s %s no usable locality text and will be carried through with empty coordinates.",
-              format(n_blank, big.mark = " "),
-              if (n_blank > 1) "records have" else "record has"
+              if (n_blank > 1) {
+                tr("%s records have no usable locality text and will be carried through with empty coordinates.")
+              } else {
+                tr("%s record has no usable locality text and will be carried through with empty coordinates.")
+              },
+              format(n_blank, big.mark = " ")
             )
           )
         }
@@ -150,10 +166,10 @@ import_server <- function(id) {
         compact = TRUE, bordered = TRUE, searchable = TRUE, resizable = TRUE,
         defaultPageSize = 10,
         columns = list(
-          record_id = reactable::colDef(name = "Record", maxWidth = 140),
-          verbatim_locality = reactable::colDef(name = "Verbatim locality"),
-          locality_key = reactable::colDef(name = "Grouping key"),
-          country = reactable::colDef(name = "Country", maxWidth = 140)
+          record_id = reactable::colDef(name = tr("Record"), maxWidth = 140),
+          verbatim_locality = reactable::colDef(name = tr("Verbatim locality")),
+          locality_key = reactable::colDef(name = tr("Grouping key")),
+          country = reactable::colDef(name = tr("Country"), maxWidth = 140)
         )
       )
     })
@@ -162,19 +178,18 @@ import_server <- function(id) {
       shiny::req(records_r())
       shiny::tagList(
         shiny::tags$hr(),
-        shiny::tags$h6("3. Project file"),
+        shiny::tags$h6(tr("3. Project file")),
         shiny::textInput(
           ns("project_name"), NULL,
-          value = default_project_name(), width = "100%"
+          value = shiny::isolate(input$project_name) %||% default_project_name(),
+          width = "100%"
         ),
         shiny::helpText(
-          "Saved in", shiny::tags$code(normalizePath(getwd(), winslash = "/")),
-          "unless you type a full path. This file holds the records and every",
-          "decision you make, saved as you go; open it again from this page to",
-          "carry on."
+          tr("Saved in"), shiny::tags$code(normalizePath(getwd(), winslash = "/")),
+          tr("unless you type a full path. This file holds the records and every decision you make, saved as you go; open it again from this page to carry on.")
         ),
         shiny::actionButton(
-          ns("create_btn"), "Create project and start georeferencing",
+          ns("create_btn"), tr("Create project and start georeferencing"),
           class = "btn-primary", width = "100%"
         )
       )
@@ -195,22 +210,24 @@ import_server <- function(id) {
       shiny::tagList(
         if (nrow(found) > 0) {
           labels <- sprintf(
-            "%s  (%s records, %s decisions, %s)", found$name,
+            tr("%s  (%s records, %s decisions, %s)"), found$name,
             format(found$n_records, big.mark = " "),
             format(found$n_decisions, big.mark = " "),
             format(found$modified, "%Y-%m-%d %H:%M")
           )
           shiny::selectInput(ns("open_existing"), NULL,
                              choices = stats::setNames(found$path, labels),
+                             selected = shiny::isolate(input$open_existing),
                              width = "100%")
         } else {
-          shiny::helpText("No project in the working directory.")
+          shiny::helpText(tr("No project in the working directory."))
         },
         shiny::textInput(
           ns("open_path"), NULL, width = "100%",
-          placeholder = "…or the full path to a project file elsewhere"
+          value = shiny::isolate(input$open_path) %||% "",
+          placeholder = tr("…or the full path to a project file elsewhere")
         ),
-        shiny::actionButton(ns("open_btn"), "Open project",
+        shiny::actionButton(ns("open_btn"), tr("Open project"),
                             class = "btn-outline-primary", width = "100%")
       )
     })
@@ -218,7 +235,7 @@ import_server <- function(id) {
     open_project <- function(path) {
       if (!is_project_file(path)) {
         shiny::showNotification(
-          paste("Not a georefapp project:", path), type = "error", duration = 8
+          paste(tr("Not a georefapp project:"), path), type = "error", duration = 8
         )
         return(invisible(FALSE))
       }
@@ -233,7 +250,7 @@ import_server <- function(id) {
       typed <- as_chr1(input$open_path)
       path <- if (!is.na(typed)) project_path(typed) else as_chr1(input$open_existing)
       if (is.na(path)) {
-        shiny::showNotification("Choose a project to open.", type = "warning")
+        shiny::showNotification(tr("Choose a project to open."), type = "warning")
         return()
       }
       open_project(path)
@@ -266,7 +283,7 @@ import_server <- function(id) {
 
       if (!is_project_file(path)) {
         shiny::showNotification(
-          paste(basename(path), "already exists and is not a georefapp project. Choose another name."),
+          paste(basename(path), tr("already exists and is not a georefapp project. Choose another name.")),
           type = "error", duration = 8
         )
         return()
@@ -277,23 +294,21 @@ import_server <- function(id) {
       n <- project_counts(path)
       pending_path_rv(path)
       shiny::showModal(shiny::modalDialog(
-        title = "This project already exists",
+        title = tr("This project already exists"),
         shiny::tags$p(
           shiny::tags$b(basename(path)), sprintf(
-            "already holds %s records and %s decisions.",
+            tr("already holds %s records and %s decisions."),
             format(n$n_records, big.mark = " "), format(n$n_decisions, big.mark = " ")
           )
         ),
         shiny::tags$p(
-          "Open it to carry on where you left off. Re-importing replaces its",
-          "records with this table and keeps every decision, which is the way to",
-          "bring in a corrected table. To start afresh, cancel and choose another name."
+          tr("Open it to carry on where you left off. Re-importing replaces its records with this table and keeps every decision, which is the way to bring in a corrected table. To start afresh, cancel and choose another name.")
         ),
         footer = shiny::tagList(
-          shiny::modalButton("Cancel"),
-          shiny::actionButton(ns("reimport_btn"), "Re-import records",
+          shiny::modalButton(tr("Cancel")),
+          shiny::actionButton(ns("reimport_btn"), tr("Re-import records"),
                               class = "btn-outline-danger"),
-          shiny::actionButton(ns("open_instead_btn"), "Open it", class = "btn-primary")
+          shiny::actionButton(ns("open_instead_btn"), tr("Open it"), class = "btn-primary")
         )
       ))
     })
@@ -473,29 +488,29 @@ example_localities_path <- function() {
 #' Warn that identifiers were replaced by row numbers
 #'
 #' @param issue Result of [record_id_issue()], or `NULL`.
+#' @param i18n A translator.
 #'
 #' @return An alert, or `NULL`.
 #' @noRd
-id_issue_alert <- function(issue) {
+id_issue_alert <- function(issue, i18n = georef_translator()) {
   if (is.null(issue)) return(NULL)
+  tr <- i18n$t
   problems <- c(
     if (issue$n_missing > 0) {
-      sprintf("%s row%s %s no value", format(issue$n_missing, big.mark = " "),
-              if (issue$n_missing > 1) "s" else "", if (issue$n_missing > 1) "have" else "has")
+      sprintf(if (issue$n_missing > 1) tr("%s rows have no value") else tr("%s row has no value"),
+              format(issue$n_missing, big.mark = " "))
     },
     if (issue$n_duplicated > 0) {
-      sprintf("%s rows share a value with another row (e.g. %s)",
+      sprintf(tr("%s rows share a value with another row (e.g. %s)"),
               format(issue$n_duplicated, big.mark = " "),
               paste0("‘", issue$examples, "’", collapse = ", "))
     }
   )
   shinyWidgets::alert(
     status = "danger",
-    shiny::tags$b(sprintf("The column ‘%s’ cannot identify your records:", issue$column)),
+    shiny::tags$b(sprintf(tr("The column ‘%s’ cannot identify your records:"), issue$column)),
     paste0(paste(problems, collapse = "; "), "."),
     shiny::tags$br(),
-    "Row numbers (r000001, r000002, …) will be used as record identifiers instead, so the",
-    "results can only be joined back to this file by row order, not by your own identifiers.",
-    "Choose a column with a unique value on every row, or fix the file and load it again."
+    tr("Row numbers (r000001, r000002, …) will be used as record identifiers instead, so the results can only be joined back to this file by row order, not by your own identifiers. Choose a column with a unique value on every row, or fix the file and load it again.")
   )
 }

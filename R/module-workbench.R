@@ -11,6 +11,8 @@
 #' @param on_export Function called, with no arguments, when the user asks to
 #'   go to their results. The workbench does not know the page layout around
 #'   it, so moving there is the caller's job.
+#' @param i18n For the UI, a translator from [georef_translator()]; for the
+#'   server, a [shiny::reactive()] returning one.
 #'
 #' @return
 #'  * UI: HTML tags for the workbench page.
@@ -20,8 +22,9 @@
 #' @name module-workbench
 #'
 #' @export
-workbench_ui <- function(id) {
+workbench_ui <- function(id, i18n = georef_translator()) {
   ns <- shiny::NS(id)
+  tr <- i18n$t
   shiny::tagList(
     shiny::uiOutput(ns("no_project")),
     shiny::conditionalPanel(
@@ -47,83 +50,83 @@ workbench_ui <- function(id) {
         bslib::card(
           bslib::card_body(
             shiny::checkboxInput(
-              ns("show_candidates"), "Show similar localities on the map",
+              ns("show_candidates"), tr("Show similar localities on the map"),
               value = TRUE
             ),
             shiny::uiOutput(ns("candidates")),
             shiny::tags$hr(),
-            shiny::tags$h6("Interpretation"),
+            shiny::tags$h6(tr("Interpretation")),
             shiny::numericInput(
               ns("radius_m"),
               shiny::tagList(
-                "Radius for a bare point (m) ",
+                tr("Radius for a bare point (m)"), " ",
                 bslib::popover(
                   shiny::tags$a(href = "#", class = "text-decoration-none",
                                 shiny::icon("circle-info"),
-                                `aria-label` = "What does this radius do?"),
-                  title = "Radius for a bare point",
-                  radius_help()
+                                `aria-label` = i18n_text(i18n, "What does this radius do?")),
+                  title = tr("Radius for a bare point"),
+                  radius_help(i18n)
                 )
               ),
               value = 1000, min = 0, step = 500, width = "100%"
             ),
             shiny::helpText(
               class = "mt-n2",
-              "Only for markers. It becomes the uncertainty: how far from the",
-              "marker the place could be."
+              tr("Only for markers. It becomes the uncertainty: how far from the marker the place could be.")
             ),
             shiny::checkboxInput(
               ns("centre_inside"),
-              "Force the coordinate onto the footprint",
+              tr("Force the coordinate onto the footprint"),
               value = FALSE
             ),
             shiny::checkboxInput(
               ns("is_area"),
-              "The shape is the locality itself (an area)",
+              tr("The shape is the locality itself (an area)"),
               value = FALSE
             ),
             bslib::accordion(
               open = FALSE,
               class = "mb-2",
               bslib::accordion_panel(
-                "Import an area from a file",
+                tr("Import an area from a file"),
                 value = "area_import",
                 shiny::fileInput(
                   ns("area_file"), NULL, multiple = TRUE, width = "100%",
                   accept = area_file_extensions,
+                  buttonLabel = tr("Browse..."),
                   placeholder = "GeoJSON, KML, GPKG, shapefile"
                 ),
                 shiny::conditionalPanel(
                   condition = "output.area_loaded === true",
                   ns = ns,
-                  shiny::selectInput(ns("area_layer"), "Layer", choices = NULL, width = "100%"),
-                  shiny::selectInput(ns("area_label"), "Name features by", choices = NULL, width = "100%"),
+                  shiny::selectInput(ns("area_layer"), tr("Layer"), choices = NULL, width = "100%"),
+                  shiny::selectInput(ns("area_label"), tr("Name features by"), choices = NULL, width = "100%"),
                   shiny::selectizeInput(
-                    ns("area_features"), "Features making up this locality",
+                    ns("area_features"), tr("Features making up this locality"),
                     choices = NULL, multiple = TRUE, width = "100%",
-                    options = list(placeholder = "Type to search")
+                    options = list(placeholder = i18n_text(i18n, "Type to search"))
                   ),
                   shiny::numericInput(
-                    ns("area_tolerance"), "Simplify boundary to (m, 0 = keep as is)",
+                    ns("area_tolerance"), tr("Simplify boundary to (m, 0 = keep as is)"),
                     value = 0, min = 0, step = 10, width = "100%"
                   )
                 )
               )
             ),
             shiny::tags$hr(),
-            shiny::tags$h6("Provenance"),
-            shiny::textInput(ns("by"), "Georeferenced by", width = "100%"),
-            shiny::textInput(ns("sources"), "Sources consulted", width = "100%"),
+            shiny::tags$h6(tr("Provenance")),
+            shiny::textInput(ns("by"), tr("Georeferenced by"), width = "100%"),
+            shiny::textInput(ns("sources"), tr("Sources consulted"), width = "100%"),
             shiny::textAreaInput(
-              ns("remarks"), "Remarks", width = "100%", height = "80px",
-              placeholder = "Why this interpretation?"
+              ns("remarks"), tr("Remarks"), width = "100%", height = "80px",
+              placeholder = i18n_text(i18n, "Why this interpretation?")
             ),
             shiny::actionButton(
-              ns("save"), "Save georeference",
+              ns("save"), tr("Save georeference"),
               class = "btn-primary w-100 mb-2"
             ),
             shiny::actionButton(
-              ns("unresolvable"), "Cannot be georeferenced",
+              ns("unresolvable"), tr("Cannot be georeferenced"),
               class = "btn-outline-secondary w-100"
             )
           )
@@ -136,9 +139,16 @@ workbench_ui <- function(id) {
 #' @rdname module-workbench
 #'
 #' @export
-workbench_server <- function(id, con_r, on_export = NULL) {
+workbench_server <- function(id, con_r, on_export = NULL,
+                             i18n = shiny::reactive(georef_translator())) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    tr <- function(x) i18n()$t(x)
+
+    # A placeholder is an attribute, which the language switch cannot reach.
+    shiny::observeEvent(i18n(), {
+      shiny::updateTextAreaInput(session, "remarks", placeholder = tr("Why this interpretation?"))
+    }, ignoreInit = TRUE)
 
     features_rv <- shiny::reactiveValues(x = NULL)
     # Bumped on every write, so the locality list, the map and the export page
@@ -156,8 +166,8 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       if (!is.null(con_r())) return(NULL)
       shinyWidgets::alert(
         status = "info",
-        shiny::tags$b("No project open."),
-        "Import a locality table on the Import page to begin."
+        shiny::tags$b(tr("No project open.")),
+        tr("Import a locality table on the Import page to begin.")
       )
     })
 
@@ -175,15 +185,15 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       p <- project_progress(con)
       shiny::tags$div(
         class = "d-flex flex-wrap align-items-baseline gap-2",
-        shiny::tags$span(sprintf("%d of %d localities", p$done + p$unresolvable, p$localities)),
+        shiny::tags$span(sprintf(tr("%d of %d localities"), p$done + p$unresolvable, p$localities)),
         shiny::tags$span(
           class = "text-muted small",
-          sprintf("%s of %s records", format(p$records_done, big.mark = " "),
+          sprintf(tr("%s of %s records"), format(p$records_done, big.mark = " "),
                   format(p$records, big.mark = " "))
         ),
         # Always there, not only at the end: a partial export is legitimate,
         # and the way out should not have to be discovered.
-        shiny::actionLink(ns("go_export_header"), "Export results →",
+        shiny::actionLink(ns("go_export_header"), tr("Export results →"),
                           class = "small ms-auto")
       )
     })
@@ -204,26 +214,27 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       if (p$pending > 0) return(invisible(NULL))
       finished_rv(TRUE)
       shiny::showModal(shiny::modalDialog(
-        title = "All localities decided",
+        title = tr("All localities decided"),
         shiny::tags$p(sprintf(
-          "%s of %s records now carry a georeference%s.",
+          tr("%s of %s records now carry a georeference%s."),
           format(p$records_done, big.mark = " "), format(p$records, big.mark = " "),
-          if (p$unresolvable > 0) sprintf("; %d localities were marked unresolvable", p$unresolvable) else ""
+          if (p$unresolvable > 0) sprintf(tr("; %d localities were marked unresolvable"), p$unresolvable) else ""
         )),
         shiny::tags$p(
-          "Every decision is already saved in the project file. The Export page",
-          "turns it into a Darwin Core table, the decision log and a GIS file of",
-          "the footprints."
+          tr("Every decision is already saved in the project file. The Export page turns it into a Darwin Core table, the decision log and a GIS file of the footprints.")
         ),
         footer = shiny::tagList(
-          shiny::modalButton("Stay here"),
-          shiny::actionButton(ns("go_export_modal"), "Go to Export", class = "btn-primary")
+          shiny::modalButton(tr("Stay here")),
+          shiny::actionButton(ns("go_export_modal"), tr("Go to Export"), class = "btn-primary")
         )
       ))
     }
 
     output$localities <- reactable::renderReactable({
       loc <- localities_r()
+      # Isolated: rebuilding the table on a language switch would send the
+      # selection back to the first row. The header follows on the next save.
+      locality_label <- shiny::isolate(tr("Locality"))
       reactable::reactable(
         loc[, c("verbatim_locality", "n_records", "status")],
         selection = "single", onClick = "select",
@@ -231,7 +242,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
         highlight = TRUE, compact = TRUE, searchable = TRUE,
         defaultPageSize = 100, pagination = FALSE, height = 600,
         columns = list(
-          verbatim_locality = reactable::colDef(name = "Locality"),
+          verbatim_locality = reactable::colDef(name = locality_label),
           n_records = reactable::colDef(name = "n", maxWidth = 55),
           status = reactable::colDef(
             name = "", maxWidth = 40, align = "center",
@@ -258,17 +269,17 @@ workbench_server <- function(id, con_r, on_export = NULL) {
 
     output$current_title <- shiny::renderUI({
       cur <- current_r()
-      if (is.null(cur)) return(shiny::tags$span("Select a locality"))
+      if (is.null(cur)) return(shiny::tags$span(tr("Select a locality")))
       shiny::tagList(
         shiny::tags$b(cur$verbatim_locality),
         shiny::tags$span(
           class = "text-muted small ms-2",
-          sprintf("%d record%s", cur$n_records, if (cur$n_records > 1) "s" else "")
+          sprintf(if (cur$n_records > 1) tr("%d records") else tr("%d record"), cur$n_records)
         ),
         if (!is.na(cur$decision_id)) {
           shiny::tags$span(
             class = "badge bg-success ms-2",
-            "already georeferenced — saving will supersede it"
+            tr("already georeferenced — saving will supersede it")
           )
         }
       )
@@ -300,7 +311,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       tryCatch({
         path <- area_resolve_upload(f$datapath, f$name)
         layers <- area_layers(path)
-        if (length(layers) == 0) stop("The file holds no polygon layer.", call. = FALSE)
+        if (length(layers) == 0) stop(tr("The file holds no polygon layer."), call. = FALSE)
         # Name the file as the user knows it: an archive by its own name, with
         # the member that was read.
         name <- if (nrow(f) == 1 && !identical(f$name, basename(path))) {
@@ -332,7 +343,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       cols <- setdiff(names(x), attr(x, "sf_column"))
       shiny::updateSelectInput(
         session, "area_label",
-        choices = c("(feature number)" = "", cols),
+        choices = c(stats::setNames("", shiny::isolate(tr("(feature number)"))), cols),
         selected = area_label_column(x) %||% ""
       )
     })
@@ -343,7 +354,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       x <- area_data_r()
       shiny::req(x)
       col <- input$area_label
-      fallback <- paste("Feature", seq_len(nrow(x)))
+      fallback <- paste(shiny::isolate(tr("Feature")), seq_len(nrow(x)))
       labels <- if (isTRUE(col %in% names(x))) as.character(x[[col]]) else fallback
       blank <- is.na(labels) | !nzchar(trimws(labels))
       labels[blank] <- fallback[blank]
@@ -406,7 +417,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
     shiny::observeEvent(imported_r(), {
       proxy <- leaflet::leafletProxy("map", session)
       leaflet::clearGroup(proxy, "imported")
-      add_imported_area(proxy, imported_r())
+      add_imported_area(proxy, imported_r(), i18n())
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     shiny::observeEvent(input$map_center, {
@@ -437,13 +448,14 @@ workbench_server <- function(id, con_r, on_export = NULL) {
           )
         if (!is.null(cur) && !is.na(cur$decision_id) && !is.na(cur$decimal_latitude)) {
           map <- add_existing_decision(
-            map, cur, store_decision_footprint(con_r(), cur$decision_id)
+            map, cur, store_decision_footprint(con_r(), cur$decision_id), i18n()
           )
         }
-        map <- add_imported_area(map, imported_r())
+        map <- add_imported_area(map, imported_r(), i18n())
         # Isolated: the checkbox is served by the proxy observer, so reading it
-        # reactively here would rebuild the map on every toggle.
-        if (isTRUE(input$show_candidates)) map <- add_candidates(map, candidates_r())
+        # reactively here would rebuild the map on every toggle. So is the
+        # language, since a rebuild would also clear what the user has drawn.
+        if (isTRUE(input$show_candidates)) map <- add_candidates(map, candidates_r(), i18n())
         map
       })
     })
@@ -495,7 +507,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       if (is.null(m)) {
         return(shiny::tags$span(
           class = "text-muted small",
-          "Draw a point, circle, line or polygon on the map, or import an area."
+          tr("Draw a point, circle, line or polygon on the map, or import an area.")
         ))
       }
       has_area <- !is.na(m$point_radius_spatial_fit) && m$footprint_area_m2 > 0
@@ -504,21 +516,21 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       shiny::tagList(
         shiny::tags$div(
           class = "d-flex flex-wrap gap-3 small",
-          metric_item("Latitude", sprintf("%.5f", m$decimal_latitude)),
-          metric_item("Longitude", sprintf("%.5f", m$decimal_longitude)),
-          metric_item("Uncertainty", sprintf("%s m", format(m$coordinate_uncertainty_m, big.mark = " "))),
+          metric_item(tr("Latitude"), sprintf("%.5f", m$decimal_latitude)),
+          metric_item(tr("Longitude"), sprintf("%.5f", m$decimal_longitude)),
+          metric_item(tr("Uncertainty"), sprintf("%s m", format(m$coordinate_uncertainty_m, big.mark = " "))),
           metric_item(
-            "Spatial fit",
-            if (is.na(m$point_radius_spatial_fit)) "undefined" else sprintf("%.3f", m$point_radius_spatial_fit)
+            tr("Spatial fit"),
+            if (is.na(m$point_radius_spatial_fit)) tr("undefined") else sprintf("%.3f", m$point_radius_spatial_fit)
           ),
-          if (has_area) metric_item("Area", format_area(m$footprint_area_m2)),
-          metric_item("Centre rule", m$centre_rule)
+          if (has_area) metric_item(tr("Area"), format_area(m$footprint_area_m2)),
+          metric_item(tr("Centre rule"), m$centre_rule)
         ),
         if (!is.na(m$point_radius_used) && m$point_radius_used > 0) {
           shiny::tags$div(
             class = "text-muted small mt-2",
             sprintf(
-              "Includes the %s m radius set for markers, under Interpretation.",
+              tr("Includes the %s m radius set for markers, under Interpretation."),
               format(m$point_radius_used, big.mark = " ")
             )
           )
@@ -526,13 +538,13 @@ workbench_server <- function(id, con_r, on_export = NULL) {
         if (!is.null(imported_r()) && length(features_rv$x) > 0) {
           shiny::tags$div(
             class = "text-muted small mt-2",
-            "Using the imported area; shapes drawn on the map are ignored."
+            tr("Using the imported area; shapes drawn on the map are ignored.")
           )
         },
         if (isTRUE(input$is_area) && !has_area) {
           shiny::tags$div(
             class = "text-danger small mt-2",
-            "An area needs a footprint with an area: a line or a bare point cannot be one."
+            tr("An area needs a footprint with an area: a line or a bare point cannot be one.")
           )
         },
         # Worth saying because it is invisible until export: footprintWKT is
@@ -541,15 +553,19 @@ workbench_server <- function(id, con_r, on_export = NULL) {
           shiny::tags$div(
             class = "text-warning small mt-2",
             sprintf(
-              "The footprint is %s kB of text, written on each of %d record%s. Consider simplifying the boundary.",
-              format(round(wkt_kb), big.mark = " "), n_rec, if (n_rec > 1) "s" else ""
+              if (n_rec > 1) {
+                tr("The footprint is %s kB of text, written on each of %d records. Consider simplifying the boundary.")
+              } else {
+                tr("The footprint is %s kB of text, written on %d record. Consider simplifying the boundary.")
+              },
+              format(round(wkt_kb), big.mark = " "), n_rec
             )
           )
         },
         if (m$coordinate_uncertainty_m == 0) {
           shiny::tags$div(
             class = "text-danger small mt-2",
-            "A radius of zero claims the locality is known exactly. Set a radius before saving."
+            tr("A radius of zero claims the locality is known exactly. Set a radius before saving.")
           )
         }
       )
@@ -564,7 +580,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
 
     output$candidates <- shiny::renderUI({
       cand <- candidates_r()
-      candidate_panel(cand, ns("focus"))
+      candidate_panel(cand, ns("focus"), i18n())
     })
 
     # Candidates are added through a proxy rather than by rebuilding the map:
@@ -574,7 +590,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
     shiny::observeEvent(input$show_candidates, {
       proxy <- leaflet::leafletProxy("map", session)
       leaflet::clearGroup(proxy, "candidates")
-      if (isTRUE(input$show_candidates)) add_candidates(proxy, candidates_r())
+      if (isTRUE(input$show_candidates)) add_candidates(proxy, candidates_r(), i18n())
     }, ignoreInit = TRUE)
 
     shiny::observeEvent(input$focus, {
@@ -628,12 +644,12 @@ workbench_server <- function(id, con_r, on_export = NULL) {
     shiny::observeEvent(input$save, {
       m <- metrics_r()
       if (is.null(m)) {
-        shiny::showNotification("Draw a footprint on the map first.", type = "warning")
+        shiny::showNotification(tr("Draw a footprint on the map first."), type = "warning")
         return()
       }
       if (m$coordinate_uncertainty_m == 0) {
         shiny::showNotification(
-          "Set a radius: a zero uncertainty claims the locality is known exactly.",
+          tr("Set a radius: a zero uncertainty claims the locality is known exactly."),
           type = "error"
         )
         return()
@@ -641,7 +657,7 @@ workbench_server <- function(id, con_r, on_export = NULL) {
       is_area <- isTRUE(input$is_area)
       if (is_area && is.na(m$point_radius_spatial_fit)) {
         shiny::showNotification(
-          "An area needs a footprint with an area. Draw a polygon or circle, or untick the area box.",
+          tr("An area needs a footprint with an area. Draw a polygon or circle, or untick the area box."),
           type = "error"
         )
         return()
@@ -702,30 +718,31 @@ metric_item <- function(label, value) {
 #' @param cand A tibble shaped like [candidates_empty()].
 #' @param focus_input Namespaced id of the input a click reports the chosen
 #'   candidate to.
+#' @param i18n A translator.
 #'
 #' @return An HTML tag list.
 #' @noRd
-candidate_panel <- function(cand, focus_input) {
+candidate_panel <- function(cand, focus_input, i18n = georef_translator()) {
+  tr <- i18n$t
   q <- attr(cand, "query")
   ignored <- if (is.null(q)) character() else c(q$too_common, q$unknown)
 
   if (nrow(cand) == 0) {
     return(shiny::tagList(
-      shiny::tags$h6("Similar localities"),
+      shiny::tags$h6(tr("Similar localities")),
       shiny::tags$div(
         class = "text-muted small",
         if (is.null(getOption("georefapp.candidates"))) {
           shiny::tagList(
-            "No locality dictionary is configured.",
+            tr("No locality dictionary is configured."),
             shiny::tags$br(),
             shiny::tags$span(class = "fst-italic",
-                             "See gazetteer_provider().")
+                             tr("See gazetteer_provider()."))
           )
         } else if (length(ignored) && is.null(q$token)) {
-          paste0("Nothing distinctive to search on: every word in this ",
-                 "locality is common across the dictionary.")
+          tr("Nothing distinctive to search on: every word in this locality is common across the dictionary.")
         } else {
-          "No similar locality found in the dictionary."
+          tr("No similar locality found in the dictionary.")
         }
       )
     ))
@@ -749,12 +766,12 @@ candidate_panel <- function(cand, focus_input) {
     }
     detail <- paste(c(
       if (!is.na(r$source) && r$source != "rainbio") r$source,
-      sprintf("%d record%s", r$n_records, if (r$n_records > 1) "s" else ""),
+      sprintf(if (r$n_records > 1) tr("%d records") else tr("%d record"), r$n_records),
       if (geo && !is.na(r$n_distinct_coords))
-        sprintf("%d coord%s", r$n_distinct_coords,
-                if (r$n_distinct_coords > 1) "s" else ""),
-      if (!geo) "not georeferenced",
-      sprintf("%.0f%% match", 100 * r$coverage)
+        sprintf(if (r$n_distinct_coords > 1) tr("%d coords") else tr("%d coord"),
+                r$n_distinct_coords),
+      if (!geo) tr("not georeferenced"),
+      sprintf(tr("%.0f%% match"), 100 * r$coverage)
     ), collapse = " · ")
 
     shiny::tags$div(
@@ -776,13 +793,13 @@ candidate_panel <- function(cand, focus_input) {
 
   shiny::tagList(
     shiny::tags$h6(
-      "Similar localities",
+      tr("Similar localities"),
       shiny::tags$span(class = "badge bg-secondary ms-1", nrow(cand))
     ),
     if (length(ignored)) {
       shiny::tags$div(
         class = "text-muted", style = "font-size:0.7rem;",
-        "Not searched on: ", paste(ignored, collapse = ", ")
+        tr("Not searched on:"), " ", paste(ignored, collapse = ", ")
       )
     },
     shiny::tags$div(style = "max-height:230px;overflow-y:auto;", rows)
@@ -797,12 +814,14 @@ candidate_panel <- function(cand, focus_input) {
 #'
 #' @param map A leaflet map or proxy.
 #' @param cand A tibble shaped like [candidates_empty()].
+#' @param i18n A translator.
 #'
 #' @return The map.
 #' @noRd
-add_candidates <- function(map, cand) {
+add_candidates <- function(map, cand, i18n = georef_translator()) {
   cand <- cand[which(cand$is_georeferenced & !is.na(cand$decimal_latitude)), ]
   if (nrow(cand) == 0) return(map)
+  fmt <- paste0("<b>%s</b><br>%s", i18n$t("%d records, %s distinct coordinates"))
   leaflet::addCircleMarkers(
     map,
     lng = cand$decimal_longitude, lat = cand$decimal_latitude,
@@ -811,7 +830,7 @@ add_candidates <- function(map, cand) {
     group = "candidates",
     label = lapply(seq_len(nrow(cand)), function(i) {
       htmltools::HTML(sprintf(
-        "<b>%s</b><br>%s%d records, %s distinct coordinates",
+        fmt,
         htmltools::htmlEscape(truncate_text(cand$locality_verbatim[i], 90)),
         if (!is.na(cand$source[i]) && cand$source[i] != "rainbio")
           paste0(htmltools::htmlEscape(cand$source[i]), " · ") else "",
@@ -858,21 +877,22 @@ truncate_text <- function(x, n = 70L) {
 #' @param cur One row of [store_localities()].
 #' @param footprint The decision's footprint, from [store_decision_footprint()],
 #'   or `NULL`.
+#' @param i18n A translator.
 #'
 #' @return The map, with the footprint added.
 #' @noRd
-add_existing_decision <- function(map, cur, footprint = NULL) {
+add_existing_decision <- function(map, cur, footprint = NULL, i18n = georef_translator()) {
   if (!is.null(footprint)) {
     type <- as.character(sf::st_geometry_type(footprint))
     if (type %in% c("POLYGON", "MULTIPOLYGON")) {
       map <- leaflet::addPolygons(
         map, data = footprint, color = "#198754", weight = 2, dashArray = "4",
-        fillOpacity = 0.12, label = "Current footprint", group = "existing"
+        fillOpacity = 0.12, label = i18n$t("Current footprint"), group = "existing"
       )
     } else if (type %in% c("LINESTRING", "MULTILINESTRING")) {
       map <- leaflet::addPolylines(
         map, data = footprint, color = "#198754", weight = 3,
-        label = "Current footprint", group = "existing"
+        label = i18n$t("Current footprint"), group = "existing"
       )
     }
   }
@@ -887,7 +907,7 @@ add_existing_decision <- function(map, cur, footprint = NULL) {
     map,
     lng = cur$decimal_longitude, lat = cur$decimal_latitude,
     radius = 4, color = "#198754", fillOpacity = 1,
-    label = "Current georeference", group = "existing"
+    label = i18n$t("Current georeference"), group = "existing"
   )
 }
 
@@ -900,14 +920,15 @@ add_existing_decision <- function(map, cur, footprint = NULL) {
 #'
 #' @param map A leaflet map or proxy.
 #' @param area Result of [area_prepare()], or `NULL`.
+#' @param i18n A translator.
 #'
 #' @return The map.
 #' @noRd
-add_imported_area <- function(map, area) {
+add_imported_area <- function(map, area, i18n = georef_translator()) {
   if (is.null(area)) return(map)
   leaflet::addPolygons(
     map, data = area, color = "#0d6efd", weight = 2, fillOpacity = 0.15,
-    label = "Imported area", group = "imported"
+    label = i18n$t("Imported area"), group = "imported"
   )
 }
 
@@ -927,36 +948,28 @@ format_area <- function(m2) {
 
 #' Explanation of the bare-point radius
 #'
+#' @param i18n A translator.
+#'
 #' @return HTML tags for the popover body.
 #' @noRd
-radius_help <- function() {
+radius_help <- function(i18n = georef_translator()) {
+  tr <- i18n$t
   htmltools::tagList(
     htmltools::tags$p(
-      "A marker on its own says nothing about how big the place is. This radius",
-      "is drawn around each marker, and the result is treated like a circle you",
-      "had drawn yourself."
+      tr("A marker on its own says nothing about how big the place is. This radius is drawn around each marker, and the result is treated like a circle you had drawn yourself.")
     ),
     htmltools::tags$p(
-      htmltools::tags$b("What it changes."),
-      "It becomes coordinateUncertaintyInMeters for every record sharing the",
-      "locality: the claim that the specimen was collected within that distance",
-      "of the coordinate. Too small overstates how precisely the place is known;",
-      "too large throws away precision you had."
+      htmltools::tags$b(tr("What it changes.")), " ",
+      tr("It becomes coordinateUncertaintyInMeters for every record sharing the locality: the claim that the specimen was collected within that distance of the coordinate. Too small overstates how precisely the place is known; too large throws away precision you had.")
     ),
     htmltools::tags$p(
-      htmltools::tags$b("What it does not touch."),
-      "Circles keep their own radius. Lines and polygons are used as drawn. A",
-      "marker drawn together with other shapes gets the radius before the",
-      "enclosing circle is computed. Saved georeferences are not changed; the",
-      "value applies to what you save next, and stays set for the next locality."
+      htmltools::tags$b(tr("What it does not touch.")), " ",
+      tr("Circles keep their own radius. Lines and polygons are used as drawn. A marker drawn together with other shapes gets the radius before the enclosing circle is computed. Saved georeferences are not changed; the value applies to what you save next, and stays set for the next locality.")
     ),
     htmltools::tags$p(
       class = "mb-0",
-      htmltools::tags$b("Choosing it."),
-      "Cover the extent of the place the text names: from the marker to the",
-      "farthest edge of the village, camp or town. Add the imprecision of the",
-      "source: a coarse map, a guessed position. Zero is refused, since it claims",
-      "the spot is known exactly."
+      htmltools::tags$b(tr("Choosing it.")), " ",
+      tr("Cover the extent of the place the text names: from the marker to the farthest edge of the village, camp or town. Add the imprecision of the source: a coarse map, a guessed position. Zero is refused, since it claims the spot is known exactly.")
     )
   )
 }

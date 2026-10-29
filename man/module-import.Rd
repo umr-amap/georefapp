@@ -6,12 +6,15 @@
 \alias{import_server}
 \title{Import module: open a project, or create one from a locality table}
 \usage{
-import_ui(id)
+import_ui(id, i18n = georef_translator())
 
-import_server(id)
+import_server(id, i18n = shiny::reactive(georef_translator()))
 }
 \arguments{
 \item{id}{Module id.}
+
+\item{i18n}{For the UI, a translator from [georef_translator()]; for the
+server, a [shiny::reactive()] returning one.}
 }
 \value{
 * UI: HTML tags for the import page.

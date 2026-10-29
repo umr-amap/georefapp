@@ -1,36 +1,53 @@
 #' User interface for the georeferencing application
 #'
+#' @param language Language the page opens in, `"fr"` (the default) or `"en"`.
+#'   A switch in the navigation bar changes it during the session.
+#'
 #' @return A bslib page.
 #'
 #' @export
-georef_ui <- function() {
+georef_ui <- function(language = "fr") {
+  i18n <- georef_translator(language)
+  # usei18n() must run before any t() call: it is what makes t() return spans
+  # the language switch can rewrite in the browser.
+  i18n_head <- shiny.i18n::usei18n(i18n)
+  tr <- i18n$t
   bslib::page_navbar(
     id = "nav",
     title = "georefapp",
     theme = bslib::bs_theme(version = 5, primary = "#0d6efd"),
     fillable = FALSE,
-    header = htmltools::tags$head(
-      htmltools::tags$style(htmltools::HTML(
-        ".reactable { font-size: 0.85rem; } .card-header { font-weight: 500; }"
-      ))
+    header = htmltools::tagList(
+      i18n_head,
+      htmltools::tags$head(
+        htmltools::tags$style(htmltools::HTML(
+          ".reactable { font-size: 0.85rem; } .card-header { font-weight: 500; }"
+        ))
+      )
     ),
     bslib::nav_panel(
-      title = "Import",
+      title = tr("Import"),
       value = "import",
-      htmltools::tags$div(class = "mt-3", import_ui("import"))
+      htmltools::tags$div(class = "mt-3", import_ui("import", i18n))
     ),
     bslib::nav_panel(
-      title = "Georeference",
+      title = tr("Georeference"),
       value = "workbench",
-      htmltools::tags$div(class = "mt-3", workbench_ui("workbench"))
+      htmltools::tags$div(class = "mt-3", workbench_ui("workbench", i18n))
     ),
     bslib::nav_panel(
-      title = "Export",
+      title = tr("Export"),
       value = "export",
-      htmltools::tags$div(class = "mt-3", export_ui("export"))
+      htmltools::tags$div(class = "mt-3", export_ui("export", i18n))
     ),
     bslib::nav_spacer(),
-    bslib::nav_item(shiny::uiOutput("project_label", inline = TRUE))
+    bslib::nav_item(shiny::uiOutput("project_label", inline = TRUE)),
+    bslib::nav_item(
+      shinyWidgets::radioGroupButtons(
+        "lang", NULL, choices = georef_languages, selected = language,
+        size = "sm"
+      )
+    )
   )
 }
 
@@ -44,11 +61,13 @@ georef_ui <- function() {
 #' @param local_files Offer to write exports next to the project file, rather
 #'   than only as browser downloads. Defaults to `FALSE`: on a server the
 #'   project folder is the server's, not the user's. [launch()] turns it on.
+#' @param language Language the session starts in, matching [georef_ui()].
 #'
 #' @return A Shiny server function.
 #'
 #' @export
-georef_server <- function(stop_on_close = FALSE, local_files = FALSE) {
+georef_server <- function(stop_on_close = FALSE, local_files = FALSE,
+                          language = "fr") {
   # Counted here rather than inside the session function: the decision to stop
   # is about the application, so it has to outlive any one session.
   open_sessions <- 0L
@@ -71,7 +90,19 @@ georef_server <- function(stop_on_close = FALSE, local_files = FALSE) {
       })
     }
 
-    project_r <- import_server("import")
+    # One translator per session: a Translator holds its language as state, and
+    # on a server one user switching to English must not switch everybody.
+    translator <- georef_translator(language)
+    lang_r <- shiny::reactive(input$lang %||% language)
+    i18n <- shiny::reactive({
+      translator$set_translation_language(lang_r())
+      translator
+    })
+    # Also on start-up: the browser script first resets every static string to
+    # the key language, English, and has to be told which one was asked for.
+    shiny::observeEvent(lang_r(), shiny.i18n::update_lang(lang_r(), session))
+
+    project_r <- import_server("import", i18n = i18n)
 
     # One connection for the whole session, owned here and handed to the pages
     # that need it. Opening per module would leave a handle behind every time
@@ -96,28 +127,31 @@ georef_server <- function(stop_on_close = FALSE, local_files = FALSE) {
 
     refresh_r <- workbench_server(
       "workbench", con_r = con_rv,
-      on_export = function() bslib::nav_select("nav", "export", session = session)
+      on_export = function() bslib::nav_select("nav", "export", session = session),
+      i18n = i18n
     )
     export_server("export", con_r = con_rv, refresh_r = refresh_r,
-                  project_r = project_r, local_files = local_files)
+                  project_r = project_r, local_files = local_files, i18n = i18n)
 
     # The project file is where the work lives, so where it is stays on screen.
     output$project_label <- shiny::renderUI({
+      tr <- i18n()$t
       path <- project_r()
       if (is.null(path)) {
-        return(htmltools::tags$span(class = "navbar-text text-muted small", "no project"))
+        return(htmltools::tags$span(class = "navbar-text text-muted small", tr("no project")))
       }
       htmltools::tags$span(
         class = "navbar-text small", title = path,
-        "Project ", htmltools::tags$b(basename(path)),
-        htmltools::tags$span(class = "text-muted", " · saved as you go · "),
+        tr("Project"), " ", htmltools::tags$b(basename(path)),
+        htmltools::tags$span(class = "text-muted", " · ", tr("saved as you go"), " · "),
         htmltools::tags$a(
           href = "#", class = "text-decoration-none",
           onclick = sprintf(
-            "navigator.clipboard.writeText(%s); this.textContent = 'path copied'; return false;",
-            jsonlite::toJSON(path, auto_unbox = TRUE)
+            "navigator.clipboard.writeText(%s); this.textContent = %s; return false;",
+            jsonlite::toJSON(path, auto_unbox = TRUE),
+            jsonlite::toJSON(tr("path copied"), auto_unbox = TRUE)
           ),
-          "copy path"
+          tr("copy path")
         )
       )
     })
@@ -174,6 +208,8 @@ use_gazetteer <- function(file, ...) {
 #'   closes, rather than leaving the console blocked until interrupted.
 #'   Reloading the page does not count as closing it. Set `FALSE` to keep the
 #'   old behaviour and stop the application with Esc.
+#' @param language Language the interface opens in: `"fr"` (the default) or
+#'   `"en"`. It can be switched from the navigation bar at any time.
 #' @param ... Passed to [shiny::runApp()].
 #'
 #' @return Called for its side effect; does not return until the app stops.
@@ -188,7 +224,7 @@ use_gazetteer <- function(file, ...) {
 #' @export
 launch <- function(port = 5792, launch.browser = TRUE,
                    gazetteer = getOption("georefapp.gazetteer"),
-                   stop_on_close = TRUE, ...) {
+                   stop_on_close = TRUE, language = "fr", ...) {
   if (!is.null(gazetteer)) {
     found <- file.exists(gazetteer)
     for (g in gazetteer[!found]) message("No gazetteer at ", g, " — running without it.")
@@ -198,8 +234,9 @@ launch <- function(port = 5792, launch.browser = TRUE,
     }
   }
   app <- shiny::shinyApp(
-    ui = georef_ui(),
-    server = georef_server(stop_on_close = stop_on_close, local_files = TRUE)
+    ui = georef_ui(language),
+    server = georef_server(stop_on_close = stop_on_close, local_files = TRUE,
+                           language = language)
   )
   shiny::runApp(app, port = port, launch.browser = launch.browser, ...)
 }

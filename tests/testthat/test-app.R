@@ -2,6 +2,9 @@
 # the store as a decision, that inheritance happens, and that a bad radius is
 # refused.
 
+# The interface defaults to French; tests that read its text ask for English.
+english <- shiny::reactive(georef_translator("en"))
+
 drawn_circle <- function(edit_id, lng, lat, radius) {
   list(
     type = "Feature",
@@ -134,7 +137,7 @@ test_that("a zero radius is refused rather than silently recorded", {
 test_that("the metrics say when the marker radius is in play, and only then", {
   con <- local_con("Yangambi")
 
-  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con)), {
+  shiny::testServer(workbench_server, args = list(con_r = shiny::reactive(con), i18n = english), {
     session$setInputs(localities__reactable__selected = 1L, radius_m = 2500)
     session$setInputs(map_draw_new_feature = drawn_marker(1, 24.4667, 0.8167))
     expect_equal(metrics_r()$point_radius_used, 2500)
@@ -152,7 +155,7 @@ test_that("the metrics say when the marker radius is in play, and only then", {
 })
 
 test_that("the radius field explains itself in the page", {
-  html <- as.character(htmltools::renderTags(workbench_ui("wb"))$html)
+  html <- as.character(htmltools::renderTags(workbench_ui("wb", georef_translator("en")))$html)
   expect_match(html, "Only for markers", fixed = TRUE)
   expect_match(html, "coordinateUncertaintyInMeters", fixed = TRUE)
 })
@@ -247,7 +250,7 @@ test_that("the evidence panel lists ungeoreferenced candidates without offering 
     coverage = c(1, 1), overlap = c(0.4, 0.2), n_matched = 1L,
     source = "rainbio"))
 
-  html <- as.character(candidate_panel(cand, "ws-focus"))
+  html <- as.character(candidate_panel(cand, "ws-focus", georef_translator("en")))
   expect_match(html, "village Mbandza")
   expect_match(html, "Layon Mbandza")
   expect_match(html, "not georeferenced")
@@ -263,7 +266,7 @@ test_that("the evidence panel lists ungeoreferenced candidates without offering 
 
 test_that("with no provider the panel says so rather than reporting no match", {
   withr::local_options(georefapp.candidates = NULL)
-  expect_match(as.character(candidate_panel(candidates_empty(), "x")),
+  expect_match(as.character(candidate_panel(candidates_empty(), "x", georef_translator("en"))),
                "No locality dictionary is configured")
 })
 
@@ -493,7 +496,7 @@ test_that("identifiers that cannot identify records are reported, with what is w
   expect_null(attr(build_records(dat, col_locality = "loc"), "id_issue"))
   expect_null(attr(build_records(dat[-2, ], col_locality = "loc", col_id = "barcode"), "id_issue"))
 
-  text <- as.character(id_issue_alert(issue))
+  text <- as.character(id_issue_alert(issue, georef_translator("en")))
   expect_match(text, "barcode", fixed = TRUE)
   expect_match(text, "2 rows have no value", fixed = TRUE)
   expect_match(text, "5 rows share a value", fixed = TRUE)
@@ -504,7 +507,7 @@ test_that("the import page warns about unusable identifiers and blank localities
   dir <- withr::local_tempdir()
   withr::local_dir(dir)
 
-  shiny::testServer(import_server, {
+  shiny::testServer(import_server, args = list(i18n = english), {
     session$setInputs(use_example = 1)
     session$setInputs(col_locality = "locality", col_id = "catalog_number",
                       col_country = "", col_admin1 = "")

@@ -6,18 +6,22 @@
 \alias{export_server}
 \title{Export module: getting the results out of a project}
 \usage{
-export_ui(id)
+export_ui(id, i18n = georef_translator())
 
 export_server(
   id,
   con_r,
   refresh_r,
   project_r = shiny::reactive(NULL),
-  local_files = FALSE
+  local_files = FALSE,
+  i18n = shiny::reactive(georef_translator())
 )
 }
 \arguments{
 \item{id}{Module id.}
+
+\item{i18n}{For the UI, a translator from [georef_translator()]; for the
+server, a [shiny::reactive()] returning one.}
 
 \item{con_r}{A [shiny::reactive()] returning the open project connection.}
 

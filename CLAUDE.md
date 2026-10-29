@@ -172,6 +172,18 @@ not a placeholder, but the state the app must stay usable in, since most of
 Central Africa is in no gazetteer. A provider that errors degrades to no
 candidates and never blocks the loop.
 
+### The interface is bilingual, French by default
+
+`shiny.i18n`, as in `plotsdatabase`: keys are the English text, the dictionary
+is `inst/translations/translation.json`. Static UI uses `i18n$t()` (spans the
+navbar FR/EN switch rewrites in the browser); server code uses the per-session
+`i18n()` reactive, so render functions re-run on a switch. Attributes such as
+placeholders cannot hold a span — use `i18n_text()`. Keys must be string
+literals passed to `tr(`, `i18n$t(` or `i18n_text(i18n, `: `test-i18n.R`
+scans the sources and fails on any key without a French entry. Only the
+interface is translated; protocol text, decision types and Darwin Core output
+stay English, since they are data.
+
 ## Dependencies
 
 `datamods` and `phosphoricons` are used by `ConApp` but are **not installed

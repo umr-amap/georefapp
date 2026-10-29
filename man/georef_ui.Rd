@@ -4,7 +4,11 @@
 \alias{georef_ui}
 \title{User interface for the georeferencing application}
 \usage{
-georef_ui()
+georef_ui(language = "fr")
+}
+\arguments{
+\item{language}{Language the page opens in, `"fr"` (the default) or `"en"`.
+A switch in the navigation bar changes it during the session.}
 }
 \value{
 A bslib page.

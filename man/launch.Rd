@@ -9,6 +9,7 @@ launch(
   launch.browser = TRUE,
   gazetteer = getOption("georefapp.gazetteer"),
   stop_on_close = TRUE,
+  language = "fr",
   ...
 )
 }
@@ -26,6 +27,9 @@ reported and then ignored rather than raised.}
 closes, rather than leaving the console blocked until interrupted.
 Reloading the page does not count as closing it. Set `FALSE` to keep the
 old behaviour and stop the application with Esc.}
+
+\item{language}{Language the interface opens in: `"fr"` (the default) or
+`"en"`. It can be switched from the navigation bar at any time.}
 
 \item{...}{Passed to [shiny::runApp()].}
 }

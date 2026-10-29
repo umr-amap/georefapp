@@ -37,6 +37,7 @@ Imports:
     RSQLite,
     sf,
     shiny,
+    shiny.i18n,
     shinyWidgets,
     stats,
     stringi,

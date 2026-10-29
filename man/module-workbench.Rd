@@ -6,12 +6,20 @@
 \alias{workbench_server}
 \title{Workbench module: the georeferencing loop}
 \usage{
-workbench_ui(id)
+workbench_ui(id, i18n = georef_translator())
 
-workbench_server(id, con_r, on_export = NULL)
+workbench_server(
+  id,
+  con_r,
+  on_export = NULL,
+  i18n = shiny::reactive(georef_translator())
+)
 }
 \arguments{
 \item{id}{Module id.}
+
+\item{i18n}{For the UI, a translator from [georef_translator()]; for the
+server, a [shiny::reactive()] returning one.}
 
 \item{con_r}{A [shiny::reactive()] returning the open project connection, or
 `NULL` when no project is open.}

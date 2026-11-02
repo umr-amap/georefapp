@@ -339,13 +339,11 @@ import_server <- function(id, i18n = shiny::reactive(georef_translator())) {
 #' @noRd
 read_locality_file <- function(path, name = basename(path)) {
   ext <- tolower(tools::file_ext(name))
-  dat <- switch(
-    ext,
-    xlsx = ,
-    xls = readxl::read_excel(path),
-    tsv = readr::read_tsv(path, show_col_types = FALSE, progress = FALSE),
-    readr::read_csv(path, show_col_types = FALSE, progress = FALSE)
-  )
+  dat <- if (ext %in% c("xlsx", "xls")) {
+    readxl::read_excel(path)
+  } else {
+    read_delimited(path)
+  }
   dat <- as.data.frame(dat, stringsAsFactors = FALSE)
   if (ncol(dat) == 0) stop("No columns found in ", name)
   attr(dat, "source_name") <- name
@@ -513,4 +511,69 @@ id_issue_alert <- function(issue, i18n = georef_translator()) {
     shiny::tags$br(),
     tr("Row numbers (r000001, r000002, …) will be used as record identifiers instead, so the results can only be joined back to this file by row order, not by your own identifiers. Choose a column with a unique value on every row, or fix the file and load it again.")
   )
+}
+
+#' Read a delimited text file, whatever its separator
+#'
+#' A "CSV" saved by Excel in a French locale uses `;`, because `,` is the
+#' decimal mark there, and is usually encoded in Windows-1252 rather than
+#' UTF-8. The extension says nothing about either, so both are sniffed from
+#' the file. Every column is read as text: identifiers such as `00123` keep
+#' their leading zeros, and no number is reinterpreted under the wrong decimal
+#' convention.
+#'
+#' @param path Path to the file.
+#' @return A tibble.
+#' @noRd
+read_delimited <- function(path) {
+  encoding <- guess_text_encoding(path)
+  delim <- guess_delimiter(path, encoding)
+  readr::read_delim(
+    path, delim = delim,
+    col_types = readr::cols(.default = readr::col_character()),
+    locale = readr::locale(encoding = encoding),
+    trim_ws = TRUE, show_col_types = FALSE, progress = FALSE
+  )
+}
+
+#' @noRd
+guess_text_encoding <- function(path) {
+  bytes <- readBin(path, "raw", n = file.size(path))
+  bytes <- bytes[bytes != as.raw(0)]
+  if (validUTF8(rawToChar(bytes))) "UTF-8" else "windows-1252"
+}
+
+#' Pick the separator from the first lines of a file
+#'
+#' Candidates are counted outside double quotes, so a comma inside a quoted
+#' locality ("Yangambi, 5 km N") does not vote. The separator that appears in
+#' the header and the same number of times on every sampled line wins; failing
+#' that (quoted line breaks, ragged rows), the one most frequent in the header.
+#'
+#' @noRd
+guess_delimiter <- function(path, encoding = "UTF-8", n = 50L) {
+  candidates <- c(",", ";", "\t", "|")
+  lines <- readr::read_lines(path, n_max = n,
+                             locale = readr::locale(encoding = encoding),
+                             progress = FALSE)
+  lines <- lines[nzchar(trimws(lines))]
+  if (length(lines) == 0) return(",")
+  unquoted <- gsub('"[^"]*"', "", lines)
+
+  counts <- vapply(candidates, function(d) {
+    lengths(regmatches(unquoted, gregexpr(d, unquoted, fixed = TRUE)))
+  }, integer(length(unquoted)))
+  counts <- matrix(counts, ncol = length(candidates),
+                   dimnames = list(NULL, candidates))
+
+  header <- counts[1, ]
+  consistent <- header > 0 &
+    apply(counts, 2, function(x) all(x == x[1]))
+  if (any(consistent)) {
+    pool <- header * consistent
+  } else {
+    pool <- header
+  }
+  if (max(pool) == 0) return(",")
+  candidates[which.max(pool)]
 }
